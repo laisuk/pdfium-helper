@@ -21,7 +21,7 @@ fn main() -> anyhow::Result<()> {
 
         // Page-by-page extraction with progress
     extract_pdf_pages_with_callback_pdfium(&pdfium, input_file, |page, total, text| {
-        print_progress(page, total, text);
+        pdfium_helper::print_progress(page, total, text);
         pages.push(text.to_owned());
     })?;
 
@@ -53,23 +53,23 @@ fn write_text_unix_newlines<P: AsRef<Path>>(path: P, s: &str) -> io::Result<()> 
     std::fs::write(path, normalized.as_bytes())
 }
 
-fn print_progress(page: i32, total: i32, text: &str) {
-    let percent = page * 100 / total.max(1);
-
-    let msg = format!(
-        "[{}/{}] ({:3}%) Extracted {} chars",
-        page,
-        total,
-        percent,
-        text.chars().count()
-    );
-
-    let mut line = msg;
-    if line.len() < 80 {
-        line.push_str(&" ".repeat(80 - line.len()));
-    }
-
-    print!("\r{}", line);
-    let _ = io::stdout().flush();
-}
+// fn print_progress(page: i32, total: i32, text: &str) {
+//     let percent = page * 100 / total.max(1);
+//
+//     let msg = format!(
+//         "[{}/{}] ({:3}%) Extracted {} chars",
+//         page,
+//         total,
+//         percent,
+//         text.chars().count()
+//     );
+//
+//     let mut line = msg;
+//     if line.len() < 80 {
+//         line.push_str(&" ".repeat(80 - line.len()));
+//     }
+//
+//     print!("\r{}", line);
+//     let _ = io::stdout().flush();
+// }
 

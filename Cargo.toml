@@ -1,3 +1,8 @@
+[workspace]
+members = [
+    "tools/opencc-rs"
+]
+
 [package]
 name = "pdfium-helper"
 version = "0.1.0"

@@ -1,3 +1,5 @@
+use std::io::{self, Write};
+
 /// Format integer with thousands separators (Python {:,} equivalent)
 pub fn format_thousand(n: usize) -> String {
     let s = n.to_string();
@@ -18,6 +20,7 @@ pub fn format_thousand(n: usize) -> String {
     out
 }
 
+/// Print in-place of progress line (carriage-return redraw).
 pub fn print_progress(page: i32, total: i32, text: &str) {
     let percent = page * 100 / total.max(1);
 
@@ -29,8 +32,12 @@ pub fn print_progress(page: i32, total: i32, text: &str) {
         text.chars().count()
     );
 
+    // pad to fully overwrite previous line
     let mut line = msg;
     if line.len() < 80 {
         line.push_str(&" ".repeat(80 - line.len()));
     }
+
+    print!("\r{}", line);
+    let _ = io::stdout().flush();
 }

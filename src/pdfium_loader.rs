@@ -162,6 +162,39 @@ impl PdfiumLibrary {
         Ok((Self { lib }, lib_path))
     }
 
+    /// Loads Pdfium from a directory that contains the native library directly:
+    ///
+    /// ```text
+    /// <dir>/<library>
+    /// ```
+    ///
+    /// e.g. `opencc-rs.exe` and `pdfium.dll` in the same folder.
+    fn load_from_dir_single_lib(dir: &Path) -> Result<(Self, PathBuf), PdfiumLoadError> {
+        let lib_path = dir.join(default_library_name());
+
+        if !lib_path.exists() {
+            return Err(PdfiumLoadError::MissingLibrary(lib_path));
+        }
+
+        let lib = unsafe {
+            libloading::Library::new(&lib_path)
+                .map_err(|e| PdfiumLoadError::LoadFailed(format!("{e}")))?
+        };
+
+        Ok((Self { lib }, lib_path))
+    }
+
+    pub fn load_from_exe_dir() -> Result<(PdfiumLibrary, PathBuf), PdfiumLoadError> {
+        let exe =
+            std::env::current_exe().map_err(|e| PdfiumLoadError::LoadFailed(e.to_string()))?;
+
+        let dir = exe
+            .parent()
+            .ok_or_else(|| PdfiumLoadError::LoadFailed("Cannot determine exe directory".into()))?;
+
+        PdfiumLibrary::load_from_dir_single_lib(dir)
+    }
+
     /// Loads Pdfium from an **explicit file path**.
     ///
     /// This is primarily intended for:
@@ -200,37 +233,107 @@ impl PdfiumLibrary {
         Ok(*sym)
     }
 
-    /// Attempts to locate and load Pdfium using a **fallback search strategy**.
+    /// Load the Pdfium native library using a series of fallback strategies.
     ///
-    /// The search order is:
+    /// This loader supports **two directory layouts** at each search location:
     ///
-    /// 1. `$PDFIUM_LIB_DIR` (explicit override)
-    /// 2. The directory containing the current executable
-    /// 3. The current working directory
-    /// 4. The crate root (`CARGO_MANIFEST_DIR`, development only)
+    /// ## Supported layouts
     ///
-    /// This method is intended to provide a **zero-configuration experience**
-    /// for most users:
+    /// ### 1) Single-library layout (no bundling)
     ///
-    /// - In development, Pdfium can live in the project root
-    /// - In releases, Pdfium can be placed next to the executable
-    /// - Advanced users can override the location via an environment variable
+    /// A single Pdfium native library placed directly in the directory:
     ///
-    /// ### Errors
+    /// ```text
+    /// <dir>/pdfium.dll        (Windows)
+    /// <dir>/libpdfium.so     (Linux)
+    /// <dir>/libpdfium.dylib  (macOS)
+    /// ```
     ///
-    /// If Pdfium cannot be found in any of the fallback locations,
-    /// [`PdfiumLoadError::MissingLibrary`] is returned with the most likely
-    /// expected relative path.
+    /// This is intended for **CLI / portable distribution**, where the executable
+    /// and Pdfium library are placed side-by-side without subdirectories.
+    ///
+    /// ---
+    ///
+    /// ### 2) Bundled layout (platform folder)
+    ///
+    /// ```text
+    /// <dir>/pdfium/<platform>/<library>
+    /// ```
+    ///
+    /// Example:
+    ///
+    /// ```text
+    /// pdfium/win-x64/pdfium.dll
+    /// pdfium/linux-x64/libpdfium.so
+    /// pdfium/osx-arm64/libpdfium.dylib
+    /// ```
+    ///
+    /// This layout is recommended when shipping **multiple platforms** together
+    /// or when embedding Pdfium as part of a larger distribution.
+    ///
+    /// ---
+    ///
+    /// ## Search order
+    ///
+    /// The loader tries the following locations **in order**, and for each location
+    /// attempts **single-library layout first**, then bundled layout:
+    ///
+    /// 1. `PDFIUM_LIB_DIR` environment variable
+    /// 2. Directory containing the current executable
+    /// 3. Current working directory
+    /// 4. `CARGO_MANIFEST_DIR` (development fallback)
+    ///
+    /// The first successfully loaded library is used.
+    ///
+    /// ---
+    ///
+    /// ## Returns
+    ///
+    /// On success, returns:
+    ///
+    /// ```text
+    /// (PdfiumLibrary, PathBuf)
+    /// ```
+    ///
+    /// where the `PathBuf` is the **actual native library path loaded**.
+    ///
+    /// ---
+    ///
+    /// ## Errors
+    ///
+    /// Returns `PdfiumLoadError::MissingLibrary` if no suitable Pdfium library
+    /// can be found in any fallback location, or `LoadFailed` if loading fails.
+    ///
+    /// ---
+    ///
+    /// ## Notes
+    ///
+    /// - This function does **not** bundle or extract native libraries.
+    /// - It is suitable for both **development** (`cargo run`) and
+    ///   **production CLI binaries**.
+    /// - Keeping the Pdfium library next to the executable is the
+    ///   recommended approach for end users.
     pub fn load_with_fallbacks() -> Result<(PdfiumLibrary, PathBuf), PdfiumLoadError> {
         // 1) Explicit override: PDFIUM_LIB_DIR
         if let Ok(dir) = std::env::var("PDFIUM_LIB_DIR") {
             let base = PathBuf::from(dir);
+
+            // (A) single library in that dir
+            if let Ok(ok) = PdfiumLibrary::load_from_dir_single_lib(&base) {
+                return Ok(ok);
+            }
+            // (B) bundled layout under that dir
             return PdfiumLibrary::load_from_bundled_dir(&base);
         }
 
         // 2) Next to current executable (release-friendly)
         if let Ok(exe) = std::env::current_exe() {
             if let Some(dir) = exe.parent() {
+                // (A) single library next to exe
+                if let Ok(ok) = PdfiumLibrary::load_from_dir_single_lib(dir) {
+                    return Ok(ok);
+                }
+                // (B) bundled layout next to exe
                 if let Ok(ok) = PdfiumLibrary::load_from_bundled_dir(dir) {
                     return Ok(ok);
                 }
@@ -239,6 +342,9 @@ impl PdfiumLibrary {
 
         // 3) Current working directory
         if let Ok(cwd) = std::env::current_dir() {
+            if let Ok(ok) = PdfiumLibrary::load_from_dir_single_lib(&cwd) {
+                return Ok(ok);
+            }
             if let Ok(ok) = PdfiumLibrary::load_from_bundled_dir(&cwd) {
                 return Ok(ok);
             }
@@ -247,11 +353,16 @@ impl PdfiumLibrary {
         // 4) Crate root (development only)
         if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
             let base = PathBuf::from(manifest);
+
+            if let Ok(ok) = PdfiumLibrary::load_from_dir_single_lib(&base) {
+                return Ok(ok);
+            }
             if let Ok(ok) = PdfiumLibrary::load_from_bundled_dir(&base) {
                 return Ok(ok);
             }
         }
 
+        // Prefer returning a “likely” expected path (keep your existing behavior)
         let platform = detect_platform_folder()?;
         let expected = PathBuf::from("pdfium")
             .join(platform)

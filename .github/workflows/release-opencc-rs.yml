@@ -1,0 +1,95 @@
+name: release-opencc-rs
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Package (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: win-x64
+            os: windows-latest
+            pdfium_subdir: win-x64
+            bin_name: opencc-rs.exe
+            pdfium_lib: pdfium.dll
+
+          - name: linux-x64
+            os: ubuntu-latest
+            pdfium_subdir: linux-x64
+            bin_name: opencc-rs
+            pdfium_lib: libpdfium.so
+
+          - name: osx-arm64
+            os: macos-latest
+            pdfium_subdir: osx-arm64
+            bin_name: opencc-rs
+            pdfium_lib: libpdfium.dylib
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Build (release)
+        run: cargo build -r -p opencc-rs
+
+      # ---------------------------
+      # Package zip
+      # ---------------------------
+      - name: Prepare package dir
+        shell: bash
+        run: |
+          set -euo pipefail
+          PKG_DIR="dist/opencc-rs-${{ matrix.name }}"
+          mkdir -p "$PKG_DIR"
+
+          # 1) Binary at zip root
+          cp "target/release/${{ matrix.bin_name }}" "$PKG_DIR/"
+
+          # 2) README.md from tools/opencc-rs/ at zip root
+          cp "tools/opencc-rs/README.md" "$PKG_DIR/README.md"
+
+          # 3) Pdfium native copied from repo root/pdfium/<platform>/ into zip root
+          cp "pdfium/${{ matrix.pdfium_subdir }}/${{ matrix.pdfium_lib }}" "$PKG_DIR/${{ matrix.pdfium_lib }}"
+
+      - name: Create zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $pkg = "dist/opencc-rs-${{ matrix.name }}"
+          $zip = "dist/opencc-rs-${{ matrix.name }}.zip"
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          Compress-Archive -Path "$pkg\*" -DestinationPath $zip
+
+      - name: Create zip (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          zip -r "opencc-rs-${{ matrix.name }}.zip" "opencc-rs-${{ matrix.name }}"
+
+      # ---------------------------
+      # Upload to GitHub Release
+      # ---------------------------
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/opencc-rs-${{ matrix.name }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

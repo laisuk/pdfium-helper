@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::io::{self};
 use std::path::Path;
 
 use pdfium_helper::{

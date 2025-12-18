@@ -19,27 +19,9 @@ fn main() -> anyhow::Result<()> {
 
     let mut pages: Vec<String> = Vec::new();
 
-    // Page-by-page extraction with progress
+        // Page-by-page extraction with progress
     extract_pdf_pages_with_callback_pdfium(&pdfium, input_file, |page, total, text| {
-        let percent = page * 100 / total.max(1);
-
-        let msg = format!(
-            "[{}/{}] ({:3}%) Extracted {} chars",
-            page,
-            total,
-            percent,
-            text.chars().count()
-        );
-
-        // Pad to fully overwrite previous line (Python: ljust(80))
-        let mut line = msg;
-        if line.len() < 80 {
-            line.push_str(&" ".repeat(80 - line.len()));
-        }
-
-        print!("\r{}", line);
-        let _ = io::stdout().flush();
-
+        print_progress(page, total, text);
         pages.push(text.to_owned());
     })?;
 
@@ -48,7 +30,7 @@ fn main() -> anyhow::Result<()> {
     let full_text = pages.concat();
     println!(
         "Total extracted characters: {}",
-        format_thousand(full_text.chars().count())
+        pdfium_helper::format_thousand(full_text.chars().count())
     );
 
     println!("Reflowing CJK paragraphs...");
@@ -66,24 +48,45 @@ fn main() -> anyhow::Result<()> {
 }
 
 /// Format integer with thousands separators (Python {:,} equivalent)
-fn format_thousand(n: usize) -> String {
-    let s = n.to_string();
-    let mut out = String::with_capacity(s.len() + s.len() / 3);
-    let bytes = s.as_bytes();
-    let len = bytes.len();
-
-    for (i, &b) in bytes.iter().enumerate() {
-        out.push(b as char);
-        let remaining = len - i - 1;
-        if remaining > 0 && remaining % 3 == 0 {
-            out.push(',');
-        }
-    }
-    out
-}
+// fn format_thousand(n: usize) -> String {
+//     let s = n.to_string();
+//     let mut out = String::with_capacity(s.len() + s.len() / 3);
+//     let bytes = s.as_bytes();
+//     let len = bytes.len();
+// 
+//     for (i, &b) in bytes.iter().enumerate() {
+//         out.push(b as char);
+//         let remaining = len - i - 1;
+//         if remaining > 0 && remaining % 3 == 0 {
+//             out.push(',');
+//         }
+//     }
+//     out
+// }
 
 /// Write UTF-8 text using Unix newlines (`\n`) on all platforms
 fn write_text_unix_newlines<P: AsRef<Path>>(path: P, s: &str) -> io::Result<()> {
     let normalized = s.replace("\r\n", "\n").replace('\r', "\n");
     std::fs::write(path, normalized.as_bytes())
 }
+
+fn print_progress(page: i32, total: i32, text: &str) {
+    let percent = page * 100 / total.max(1);
+
+    let msg = format!(
+        "[{}/{}] ({:3}%) Extracted {} chars",
+        page,
+        total,
+        percent,
+        text.chars().count()
+    );
+
+    let mut line = msg;
+    if line.len() < 80 {
+        line.push_str(&" ".repeat(80 - line.len()));
+    }
+
+    print!("\r{}", line);
+    let _ = io::stdout().flush();
+}
+

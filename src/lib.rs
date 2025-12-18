@@ -1,6 +1,7 @@
 mod pdfium_loader;
 mod pdfium_text;
 mod reflow_helper;
+mod utils;
 
 pub use pdfium_loader::{PdfiumLibrary, PdfiumLoadError,};
 pub use pdfium_text::{
@@ -9,6 +10,7 @@ pub use pdfium_text::{
     PdfiumExtractError,
 };
 pub use reflow_helper::reflow_cjk_paragraphs;
+pub use utils::*;
 
 // #[cfg(test)]
 // mod tests {

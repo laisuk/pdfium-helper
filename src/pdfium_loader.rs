@@ -1,0 +1,262 @@
+use std::path::{Path, PathBuf};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum PdfiumLoadError {
+    #[error("unsupported platform: {0}")]
+    UnsupportedPlatform(String),
+
+    #[error("pdfium native library missing: {0}")]
+    MissingLibrary(PathBuf),
+
+    #[error("failed to load pdfium library: {0}")]
+    LoadFailed(String),
+}
+
+/// Equivalent to `_detect_platform_folder()` in Python. \:contentReference[oaicite:4]{index=4}
+pub fn detect_platform_folder() -> Result<String, PdfiumLoadError> {
+    #[cfg(target_os = "windows")]
+    {
+        let arch = if cfg!(target_pointer_width = "64") {
+            "x64"
+        } else {
+            "x86"
+        };
+        return Ok(format!("win-{}", arch));
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let arch = match std::env::consts::ARCH {
+            "aarch64" => "arm64",
+            "x86_64" => "x64",
+            "x86" | "i686" => "x86",
+            other => {
+                // best effort: treat unknown 64-bit as x64, else x86
+                if cfg!(target_pointer_width = "64") {
+                    "x64"
+                } else {
+                    "x86"
+                }
+            }
+        };
+        return Ok(format!("linux-{}", arch));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let arch = if std::env::consts::ARCH == "aarch64" {
+            "arm64"
+        } else {
+            "x64"
+        };
+        return Ok(format!("osx-{}", arch));
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    {
+        Err(PdfiumLoadError::UnsupportedPlatform(
+            std::env::consts::OS.to_string(),
+        ))
+    }
+}
+
+pub fn default_library_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "pdfium.dll"
+    } else if cfg!(target_os = "linux") {
+        "libpdfium.so"
+    } else {
+        "libpdfium.dylib"
+    }
+}
+
+/// A handle to a dynamically loaded **Pdfium native library**.
+///
+/// `PdfiumLibrary` owns a `libloading::Library` instance to ensure that
+/// all resolved Pdfium symbols remain valid for the lifetime of the handle.
+///
+/// This type does **not** perform any Pdfium initialization by itself
+/// (e.g. `FPDF_InitLibrary`). It is responsible only for:
+///
+/// - locating a compatible Pdfium native library (`.dll`, `.so`, `.dylib`)
+/// - loading it into the current process
+/// - keeping the library alive so function pointers remain valid
+///
+/// ## Runtime layout
+///
+/// The expected on-disk layout is:
+///
+/// ```text
+/// <base_dir>/
+/// └── pdfium/
+///     └── <platform>/
+///         └── <pdfium library>
+/// ```
+///
+/// Where:
+///
+/// - `<platform>` is one of:
+///   - `win-x64`, `win-x86`
+///   - `linux-x64`, `linux-arm64`
+///   - `osx-x64`, `osx-arm64`
+/// - `<pdfium library>` is:
+///   - `pdfium.dll` (Windows)
+///   - `libpdfium.so` (Linux)
+///   - `libpdfium.dylib` (macOS)
+///
+/// This design intentionally mirrors common Pdfium-based tools:
+/// users can simply place the correct Pdfium binary next to the executable
+/// without recompiling.
+///
+/// ## Safety
+///
+/// Loading a native library is inherently unsafe. All `unsafe` usage
+/// is contained within this type; consumers interact with it through
+/// safe abstractions.
+pub struct PdfiumLibrary {
+    lib: libloading::Library,
+}
+
+impl PdfiumLibrary {
+    /// Loads Pdfium from a **bundled directory layout**.
+    ///
+    /// This function looks for Pdfium under:
+    ///
+    /// ```text
+    /// base_dir/pdfium/<platform>/<library>
+    /// ```
+    ///
+    /// where `<platform>` and `<library>` are determined automatically
+    /// for the current operating system and CPU architecture.
+    ///
+    /// ### Typical usage
+    ///
+    /// This is the recommended loading method for:
+    ///
+    /// - released CLI binaries
+    /// - portable ZIP distributions
+    /// - applications that bundle Pdfium alongside the executable
+    ///
+    /// ### Errors
+    ///
+    /// Returns [`PdfiumLoadError::MissingLibrary`] if the expected file
+    /// does not exist, or [`PdfiumLoadError::LoadFailed`] if the library
+    /// exists but cannot be loaded by the OS.
+    pub fn load_from_bundled_dir(base_dir: &Path) -> Result<(Self, PathBuf), PdfiumLoadError> {
+        let platform_folder = detect_platform_folder()?;
+        let lib_path = base_dir
+            .join("pdfium")
+            .join(platform_folder)
+            .join(default_library_name());
+
+        if !lib_path.exists() {
+            return Err(PdfiumLoadError::MissingLibrary(lib_path));
+        }
+
+        let lib = unsafe {
+            libloading::Library::new(&lib_path)
+                .map_err(|e| PdfiumLoadError::LoadFailed(format!("{e}")))?
+        };
+
+        Ok((Self { lib }, lib_path))
+    }
+
+    /// Loads Pdfium from an **explicit file path**.
+    ///
+    /// This is primarily intended for:
+    ///
+    /// - development and debugging
+    /// - unit or integration tests
+    /// - custom embedding scenarios
+    ///
+    /// The caller is responsible for ensuring the provided path points
+    /// to a compatible Pdfium native library for the current platform.
+    pub fn load_from_path(lib_path: &Path) -> Result<Self, PdfiumLoadError> {
+        let lib = unsafe {
+            libloading::Library::new(lib_path)
+                .map_err(|e| PdfiumLoadError::LoadFailed(format!("{e}")))?
+        };
+        Ok(Self { lib })
+    }
+
+    /// Resolves a raw symbol from the loaded Pdfium library.
+    ///
+    /// This is an internal helper used by higher-level bindings to obtain
+    /// typed function pointers (e.g. `FPDF_LoadDocument`).
+    ///
+    /// # Safety
+    ///
+    /// - The caller must request the correct symbol name and type.
+    /// - The returned value must not outlive `self`.
+    pub(crate) unsafe fn get<T>(&self, name: &[u8]) -> Result<T, PdfiumLoadError>
+    where
+        T: Copy,
+    {
+        let sym: libloading::Symbol<T> = self
+            .lib
+            .get(name)
+            .map_err(|e| PdfiumLoadError::LoadFailed(format!("{e}")))?;
+        Ok(*sym)
+    }
+
+    /// Attempts to locate and load Pdfium using a **fallback search strategy**.
+    ///
+    /// The search order is:
+    ///
+    /// 1. `$PDFIUM_LIB_DIR` (explicit override)
+    /// 2. The directory containing the current executable
+    /// 3. The current working directory
+    /// 4. The crate root (`CARGO_MANIFEST_DIR`, development only)
+    ///
+    /// This method is intended to provide a **zero-configuration experience**
+    /// for most users:
+    ///
+    /// - In development, Pdfium can live in the project root
+    /// - In releases, Pdfium can be placed next to the executable
+    /// - Advanced users can override the location via an environment variable
+    ///
+    /// ### Errors
+    ///
+    /// If Pdfium cannot be found in any of the fallback locations,
+    /// [`PdfiumLoadError::MissingLibrary`] is returned with the most likely
+    /// expected relative path.
+    pub fn load_with_fallbacks() -> Result<(PdfiumLibrary, PathBuf), PdfiumLoadError> {
+        // 1) Explicit override: PDFIUM_LIB_DIR
+        if let Ok(dir) = std::env::var("PDFIUM_LIB_DIR") {
+            let base = PathBuf::from(dir);
+            return PdfiumLibrary::load_from_bundled_dir(&base);
+        }
+
+        // 2) Next to current executable (release-friendly)
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                if let Ok(ok) = PdfiumLibrary::load_from_bundled_dir(dir) {
+                    return Ok(ok);
+                }
+            }
+        }
+
+        // 3) Current working directory
+        if let Ok(cwd) = std::env::current_dir() {
+            if let Ok(ok) = PdfiumLibrary::load_from_bundled_dir(&cwd) {
+                return Ok(ok);
+            }
+        }
+
+        // 4) Crate root (development only)
+        if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
+            let base = PathBuf::from(manifest);
+            if let Ok(ok) = PdfiumLibrary::load_from_bundled_dir(&base) {
+                return Ok(ok);
+            }
+        }
+
+        let platform = detect_platform_folder()?;
+        let expected = PathBuf::from("pdfium")
+            .join(platform)
+            .join(default_library_name());
+
+        Err(PdfiumLoadError::MissingLibrary(expected))
+    }
+}

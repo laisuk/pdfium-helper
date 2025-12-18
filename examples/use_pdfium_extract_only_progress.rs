@@ -1,5 +1,3 @@
-use std::io::{self, Write};
-// use std::path::{Path, PathBuf};
 
 use pdfium_helper::{extract_pdf_pages_with_callback_pdfium, PdfiumLibrary};
 
@@ -24,24 +22,25 @@ fn main() -> anyhow::Result<()> {
     let mut pages: Vec<String> = Vec::new();
 
     extract_pdf_pages_with_callback_pdfium(&pdfium, input_file, |page, total, text| {
-        let percent = page * 100 / total.max(1);
-
-        let msg = format!(
-            "[{}/{}] ({:3}%) Extracted {} chars",
-            page,
-            total,
-            percent,
-            text.chars().count()
-        );
-
-        // Pad so previous content is fully overwritten (Python: ljust(80))
-        let mut line = msg;
-        if line.len() < 80 {
-            line.push_str(&" ".repeat(80 - line.len()));
-        }
-
-        print!("\r{}", line);
-        let _ = io::stdout().flush();
+        // let percent = page * 100 / total.max(1);
+        //
+        // let msg = format!(
+        //     "[{}/{}] ({:3}%) Extracted {} chars",
+        //     page,
+        //     total,
+        //     percent,
+        //     text.chars().count()
+        // );
+        //
+        // // Pad so previous content is fully overwritten (Python: ljust(80))
+        // let mut line = msg;
+        // if line.len() < 80 {
+        //     line.push_str(&" ".repeat(80 - line.len()));
+        // }
+        //
+        // print!("\r{}", line);
+        // let _ = io::stdout().flush();
+        pdfium_helper::print_progress(page, total, text);
 
         pages.push(text.to_owned());
     })?;
@@ -60,22 +59,3 @@ fn main() -> anyhow::Result<()> {
     println!("Done.");
     Ok(())
 }
-
-// pub fn format_thousand(n: usize) -> String {
-//     let s = n.to_string();
-//     let mut out = String::with_capacity(s.len() + s.len() / 3);
-// 
-//     let bytes = s.as_bytes();
-//     let len = bytes.len();
-// 
-//     for (i, &b) in bytes.iter().enumerate() {
-//         out.push(b as char);
-// 
-//         let remaining = len - i - 1;
-//         if remaining > 0 && remaining % 3 == 0 {
-//             out.push(',');
-//         }
-//     }
-// 
-//     out
-// }

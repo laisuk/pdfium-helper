@@ -14,7 +14,7 @@ tempfile = "3.23.0"
 walkdir = "2.5.0"
 opencc-fmmseg = "0.8.3"
 pdfium-helper = {path="../.."}
-crc= "=3.3.0"
+#crc= "=3.3.0"
 
 [build-dependencies]
 winres = "0.1.12"

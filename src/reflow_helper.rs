@@ -2,7 +2,7 @@
 //!
 //! Extracted from opencc_pyo3 PyO3 module. Designed to be reused by:
 //! - Python bindings (thin wrapper)
-//! - CLI (opencc-rs pdf / office / etc.)
+//! - CLI (opencc-rs PDF / office / etc.)
 
 use once_cell::sync::Lazy;
 use std::collections::HashSet;
@@ -163,7 +163,7 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
             let trimmed_buffer = buffer_text.trim_end();
             let last = trimmed_buffer.chars().rev().next();
             if let Some(ch) = last {
-                if ch != '，' && ch != ',' {
+                if ch != '，' && ch != ',' && ch != '、' {
                     segments.push(std::mem::take(&mut buffer));
                     buffer.push_str(&line_text);
                     dialog_state.reset();
@@ -182,8 +182,7 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
         // Colon + dialog continuation
         if let Some(last_char) = buffer_text.chars().rev().find(|c| !c.is_whitespace()) {
             if last_char == '：' || last_char == ':' {
-                let after_indent =
-                    line_text.trim_start_matches(|ch| ch == ' ' || ch == '\u{3000}');
+                let after_indent = line_text.trim_start_matches(|ch| ch == ' ' || ch == '\u{3000}');
                 if let Some(first_ch) = after_indent.chars().next() {
                     if DIALOG_OPENERS.contains(&first_ch) {
                         buffer.push_str(&line_text);
@@ -237,33 +236,82 @@ const CJK_PUNCT_END: &[char] = &[
     '〕', '〉', '］', '｝', '》', '.', '?', '!',
 ];
 
-const CHAPTER_TRAIL_BRACKETS: &[char] = &['】', '》', '〗', '〕', '〉', '」', '』', '）'];
+const CHAPTER_TRAIL_BRACKETS: &[char] = &['】', '》', '〗', '〕', '〉', '」', '』', '）', '］'];
 
-const HEADING_KEYWORDS: &[&str] = &["前言", "序章", "终章", "尾声", "后记", "番外", "尾聲", "後記"];
+const HEADING_KEYWORDS: &[&str] = &[
+    "前言", "序章", "终章", "尾声", "后记", "番外", "尾聲", "後記",
+];
 
 const CHAPTER_MARKERS: &[char] = &['章', '节', '部', '卷', '節', '回'];
 const INVALID_AFTER_MARKER: &[char] = &['分', '合'];
 
-const METADATA_SEPARATORS: &[char] = &['：', ':', '　'];
+const METADATA_SEPARATORS: &[char] = &['：', ':', '・', '　'];
 
 static METADATA_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     [
-        "書名", "书名", "作者", "譯者", "译者", "校訂", "校订", "出版社", "出版時間", "出版时间",
-        "出版日期", "版權", "版权", "版權頁", "版权页", "版權信息", "版权信息", "責任編輯", "责任编辑",
-        "編輯", "编辑", "責編", "责编", "定價", "定价", "前言", "序章", "終章", "终章", "尾聲",
-        "尾声", "後記", "后记", "品牌方", "出品方", "授權方", "授权方", "電子版權", "数字版权", "掃描",
-        "扫描", "OCR", "CIP", "在版編目", "在版编目", "分類號", "分类号", "主題詞", "主题词", "發行日",
-        "发行日", "初版", "ISBN",
+        "書名",
+        "书名",
+        "作者",
+        "譯者",
+        "译者",
+        "校訂",
+        "校订",
+        "出版社",
+        "出版時間",
+        "出版时间",
+        "出版日期",
+        "版權",
+        "版权",
+        "版權頁",
+        "版权页",
+        "版權信息",
+        "版权信息",
+        "責任編輯",
+        "责任编辑",
+        "編輯",
+        "编辑",
+        "責編",
+        "责编",
+        "定價",
+        "定价",
+        "前言",
+        "序章",
+        "終章",
+        "终章",
+        "尾聲",
+        "尾声",
+        "後記",
+        "后记",
+        "品牌方",
+        "出品方",
+        "授權方",
+        "授权方",
+        "電子版權",
+        "数字版权",
+        "掃描",
+        "扫描",
+        "OCR",
+        "CIP",
+        "在版編目",
+        "在版编目",
+        "分類號",
+        "分类号",
+        "主題詞",
+        "主题词",
+        "發行日",
+        "发行日",
+        "初版",
+        "ISBN",
     ]
-        .iter()
-        .copied()
-        .collect()
+    .iter()
+    .copied()
+    .collect()
 });
 
 const DIALOG_OPENERS: &[char] = &['“', '‘', '「', '『', '﹁', '﹃'];
 
-const OPEN_BRACKETS: &[char] = &['（', '(', '[', '【', '《', '<', '{'];
-const CLOSE_BRACKETS: &[char] = &['）', ')', ']', '】', '》', '>', '}'];
+const OPEN_BRACKETS: &[char] = &['（', '(', '［', '[', '【', '《', '<', '｛', '〔', '{'];
+const CLOSE_BRACKETS: &[char] = &['）', ')', '］', ']', '】', '》', '>', '｝', '〕', '}'];
 
 fn is_metadata_line(line: &str) -> bool {
     let s = line.trim();
@@ -453,12 +501,16 @@ fn is_heading_like(s: &str) -> bool {
     }
 
     let len = s.chars().count();
-    let max_len = if is_all_ascii(s) { 16 } else { 8 };
+    let max_len = if is_all_ascii(s) || is_mixed_cjk_ascii(s) {
+        16
+    } else {
+        8
+    };
 
     if let Some(last) = s.chars().last() {
         if (last == '：' || last == ':') && len < max_len {
             let body = strip_last_char(s);
-            if is_all_cjk(body) {
+            if is_all_cjk_no_ws(body) {
                 return true;
             }
         }
@@ -516,7 +568,7 @@ pub fn is_all_ascii(s: &str) -> bool {
 }
 
 #[inline]
-pub fn is_all_cjk(s: &str) -> bool {
+pub fn is_all_cjk_no_ws(s: &str) -> bool {
     let mut any = false;
     for ch in s.chars() {
         any = true;
@@ -533,7 +585,9 @@ pub fn is_all_cjk(s: &str) -> bool {
 #[inline]
 pub fn is_cjk_bmp(ch: char) -> bool {
     let c = ch as u32;
-    (0x3400..=0x4DBF).contains(&c) || (0x4E00..=0x9FFF).contains(&c) || (0xF900..=0xFAFF).contains(&c)
+    (0x3400..=0x4DBF).contains(&c)
+        || (0x4E00..=0x9FFF).contains(&c)
+        || (0xF900..=0xFAFF).contains(&c)
 }
 
 #[inline]
@@ -549,6 +603,51 @@ fn is_all_cjk_ignoring_ws(s: &str) -> bool {
         }
     }
     any
+}
+
+#[inline]
+pub fn is_mixed_cjk_ascii(s: &str) -> bool {
+    let mut has_cjk = false;
+    let mut has_ascii = false;
+
+    for ch in s.chars() {
+        // Neutral ASCII (allowed, but doesn't count as ASCII content)
+        match ch {
+            ' ' | '-' | '/' | ':' | '.' => continue,
+            _ => {}
+        }
+
+        let u = ch as u32;
+
+        if u <= 0x7F {
+            // ASCII range
+            if ch.is_ascii_alphanumeric() {
+                has_ascii = true;
+            } else {
+                // Disallowed ASCII symbol
+                return false;
+            }
+        }
+        // Full-width digits: '０'..'９'
+        else if (0xFF10..=0xFF19).contains(&u) {
+            has_ascii = true;
+        }
+        // CJK BMP
+        else if is_cjk_bmp(ch) {
+            has_cjk = true;
+        }
+        // Anything else is invalid
+        else {
+            return false;
+        }
+
+        // Early exit (same as C#)
+        if has_cjk && has_ascii {
+            return true;
+        }
+    }
+
+    false
 }
 
 #[inline]

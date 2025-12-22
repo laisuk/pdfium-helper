@@ -294,19 +294,25 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let header = matches.get_flag("header");
 
     // ---- default output: <input_stem>_converted.txt (same folder) ----
-    let final_output = match output_file {
-        Some(path) => path.clone(),
+    let input_norm: String = if cfg!(windows) {
+        input_file.replace(['/', '\\'], &std::path::MAIN_SEPARATOR.to_string())
+    } else {
+        input_file.clone()
+    };
+
+    let input_path = std::path::Path::new(&input_norm);
+
+    let final_output: std::path::PathBuf = match output_file {
+        Some(p) => std::path::PathBuf::from(p),
         None => {
-            let input_path = std::path::Path::new(input_file);
-            let parent = input_path.parent().unwrap_or_else(|| ".".as_ref());
+            let parent = input_path
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."));
             let stem = input_path
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("input");
-            parent
-                .join(format!("{stem}_converted.txt"))
-                .to_string_lossy()
-                .to_string()
+            parent.join(format!("{stem}_converted.txt"))
         }
     };
 
@@ -351,10 +357,13 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let converted = helper.convert(&extracted, config, punctuation);
 
     // Write as UTF-8 text (Unix newlines are usually nicer for CLI output)
-    println!("Writing output to: {final_output}");
+    // println!("Writing output to: {}", final_output.display());
     write_text_unix_newlines(&final_output, &converted)?;
 
-    eprintln!("✅  PDF converted.\n📁  Output saved to: {}", final_output);
+    eprintln!(
+        "✅  PDF converted.\n📁  Output saved to: {}",
+        final_output.display()
+    );
     Ok(())
 }
 

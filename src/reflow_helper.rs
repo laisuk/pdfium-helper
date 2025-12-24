@@ -233,10 +233,11 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
 
 const CJK_PUNCT_END: &[char] = &[
     '。', '！', '？', '；', '：', '…', '—', '”', '」', '’', '』', '）', '】', '》', '〗', '〔',
-    '〕', '〉', '］', '｝', '》', '.', '?', '!',
+    '〕', '〉', '］', '｝', '》', '＞', '.', '?', '!',
 ];
 
-const CHAPTER_TRAIL_BRACKETS: &[char] = &['】', '》', '〗', '〕', '〉', '」', '』', '）', '］'];
+const CHAPTER_TRAIL_BRACKETS: &[char] =
+    &['】', '》', '〗', '〕', '〉', '」', '』', '）', '］', '＞'];
 
 const HEADING_KEYWORDS: &[&str] = &[
     "前言", "序章", "终章", "尾声", "后记", "番外", "尾聲", "後記",
@@ -244,6 +245,14 @@ const HEADING_KEYWORDS: &[&str] = &[
 
 const CHAPTER_MARKERS: &[char] = &['章', '节', '部', '卷', '節', '回'];
 const INVALID_AFTER_MARKER: &[char] = &['分', '合'];
+const HEADING_REJECT_PUNCT: &[char] = &[
+    '，', ',', '。', '！', '？', '；',
+    // '：',
+];
+
+const CJK_NUMERALS: &[char] = &[
+    '一', '二', '三', '四', '五', '六', '七', '八', '九', '十',
+];
 
 const METADATA_SEPARATORS: &[char] = &['：', ':', '・', '　'];
 
@@ -310,8 +319,8 @@ static METADATA_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 
 const DIALOG_OPENERS: &[char] = &['“', '‘', '「', '『', '﹁', '﹃'];
 
-const OPEN_BRACKETS: &[char] = &['（', '(', '［', '[', '【', '《', '<', '｛', '〔', '{'];
-const CLOSE_BRACKETS: &[char] = &['）', ')', '］', ']', '】', '》', '>', '｝', '〕', '}'];
+const OPEN_BRACKETS: &[char] = &['（', '(', '［', '[', '【', '《', '<', '｛', '〔', '{', '＜'];
+const CLOSE_BRACKETS: &[char] = &['）', ')', '］', ']', '】', '》', '>', '｝', '〕', '}', '＞'];
 
 fn is_metadata_line(line: &str) -> bool {
     let s = line.trim();
@@ -409,6 +418,11 @@ fn is_title_heading_line(s: &str) -> bool {
         return false;
     }
 
+    // ❌ Reject sentence-like lines (comma, full stop, etc.)
+    if s.chars().any(|c| HEADING_REJECT_PUNCT.contains(&c)) {
+        return false;
+    }
+
     for &kw in HEADING_KEYWORDS {
         if s.starts_with(kw) {
             return true;
@@ -417,6 +431,19 @@ fn is_title_heading_line(s: &str) -> bool {
 
     if let Some(rest) = s.strip_prefix("番外") {
         return rest.chars().count() <= 15;
+    }
+
+    // Strong heading: 卷一 / 章十
+    {
+        let mut it = s.chars();
+        if let (Some(first), Some(second)) = (it.next(), it.next()) {
+            if (first == '卷' || first == '章')
+                && CJK_NUMERALS.contains(&second)
+                && char_count <= 17
+            {
+                return true;
+            }
+        }
     }
 
     let chars: Vec<char> = s.chars().collect();

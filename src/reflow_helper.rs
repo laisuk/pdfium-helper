@@ -233,11 +233,12 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
 
 const CJK_PUNCT_END: &[char] = &[
     '。', '！', '？', '；', '：', '…', '—', '”', '」', '’', '』', '）', '】', '》', '〗', '〔',
-    '〕', '〉', '］', '｝', '》', '＞', '.', '?', '!',
+    '〕', '〉', '⟩', '］', '｝', '》', '＞', '.', '?', '!',
 ];
 
-const CHAPTER_TRAIL_BRACKETS: &[char] =
-    &['】', '》', '〗', '〕', '〉', '」', '』', '）', '］', '＞'];
+const CHAPTER_TRAIL_BRACKETS: &[char] = &[
+    '】', '》', '〗', '〕', '〉', '」', '』', '）', '］', '＞', '⟩',
+];
 
 const HEADING_KEYWORDS: &[&str] = &[
     "前言", "序章", "终章", "尾声", "后记", "番外", "尾聲", "後記",
@@ -247,12 +248,9 @@ const CHAPTER_MARKERS: &[char] = &['章', '节', '部', '卷', '節', '回'];
 const INVALID_AFTER_MARKER: &[char] = &['分', '合'];
 const HEADING_REJECT_PUNCT: &[char] = &[
     '，', ',', '。', '！', '？', '；',
-    // '：',
 ];
 
-const CJK_NUMERALS: &[char] = &[
-    '一', '二', '三', '四', '五', '六', '七', '八', '九', '十',
-];
+const CJK_NUMERALS: &[char] = &['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
 
 const METADATA_SEPARATORS: &[char] = &['：', ':', '・', '　'];
 
@@ -319,8 +317,43 @@ static METADATA_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 
 const DIALOG_OPENERS: &[char] = &['“', '‘', '「', '『', '﹁', '﹃'];
 
-const OPEN_BRACKETS: &[char] = &['（', '(', '［', '[', '【', '《', '<', '｛', '〔', '{', '＜'];
-const CLOSE_BRACKETS: &[char] = &['）', ')', '］', ']', '】', '》', '>', '｝', '〕', '}', '＞'];
+/// Bracket punctuations (open → close)
+const BRACKET_PAIRS: &[(char, char)] = &[
+    // Parentheses
+    ('（', '）'),
+    ('(', ')'),
+    // Square brackets
+    ('［', '］'),
+    ('[', ']'),
+    // Curly braces
+    ('｛', '｝'),
+    ('{', '}'),
+    // Angle brackets
+    ('＜', '＞'),
+    ('<', '>'),
+    ('⟨', '⟩'),
+    ('〈', '〉'),
+    // CJK brackets
+    ('【', '】'),
+    ('《', '》'),
+    ('〔', '〕'),
+    ('〖', '〗'),
+];
+
+#[inline]
+fn is_bracket_opener(ch: char) -> bool {
+    BRACKET_PAIRS.iter().any(|&(open, _)| open == ch)
+}
+
+#[inline]
+fn is_bracket_closer(ch: char) -> bool {
+    BRACKET_PAIRS.iter().any(|&(_, close)| close == ch)
+}
+
+#[inline]
+fn is_matching_bracket(open: char, close: char) -> bool {
+    BRACKET_PAIRS.iter().any(|&(o, c)| o == open && c == close)
+}
 
 fn is_metadata_line(line: &str) -> bool {
     let s = line.trim();
@@ -521,10 +554,26 @@ fn is_heading_like(s: &str) -> bool {
         return false;
     }
 
-    let has_open = s.chars().any(|ch| OPEN_BRACKETS.contains(&ch));
-    let has_close = s.chars().any(|ch| CLOSE_BRACKETS.contains(&ch));
-    if has_open && !has_close {
+    if has_unclosed_bracket(s) {
         return false;
+    }
+
+    // If the whole line is wrapped by a matching bracket pair, treat as heading-like.
+    // Examples: （第一章）, 【序章】, 《后记》, 〈楔子〉
+    let mut it = s.chars();
+    if let (Some(first), Some(last)) = (it.next(), s.chars().last()) {
+        if is_matching_bracket(first, last) {
+            // Optional: ensure there is some content inside the brackets (not just "（）")
+            // Note: for CJK headings this is usually safe.
+            let inner = s
+                .strip_prefix(first)
+                .and_then(|t| t.strip_suffix(last))
+                .unwrap_or("");
+
+            if !inner.trim().is_empty() && is_mostly_cjk(inner) {
+                return true;
+            }
+        }
     }
 
     let len = s.chars().count();
@@ -678,20 +727,53 @@ pub fn is_mixed_cjk_ascii(s: &str) -> bool {
 }
 
 #[inline]
-pub fn has_unclosed_bracket(s: &str) -> bool {
-    if s.is_empty() {
-        return false;
+fn is_mostly_cjk(s: &str) -> bool {
+    let mut cjk = 0usize;
+    let mut ascii = 0usize;
+
+    for ch in s.chars() {
+        // Neutral whitespace
+        if ch.is_whitespace() {
+            continue;
+        }
+
+        // Neutral digits (ASCII + FULLWIDTH)
+        if is_digit_ascii_or_fullwidth(ch) {
+            continue;
+        }
+
+        if is_cjk_bmp(ch) {
+            cjk += 1;
+            continue;
+        }
+
+        // Count ASCII letters only; ASCII punctuation is neutral
+        if ch <= '\u{7F}' && ch.is_ascii_alphabetic() {
+            ascii += 1;
+        }
     }
+
+    cjk > 0 && cjk >= ascii
+}
+
+#[inline]
+fn is_digit_ascii_or_fullwidth(ch: char) -> bool {
+    // ASCII digits
+    if ch >= '0' && ch <= '9' {
+        return true;
+    }
+    // FULLWIDTH digits
+    ch >= '０' && ch <= '９'
+}
+
+#[inline]
+pub fn has_unclosed_bracket(s: &str) -> bool {
     let mut has_open = false;
     let mut has_close = false;
 
     for ch in s.chars() {
-        if !has_open && OPEN_BRACKETS.contains(&ch) {
-            has_open = true;
-        }
-        if !has_close && CLOSE_BRACKETS.contains(&ch) {
-            has_close = true;
-        }
+        has_open |= is_bracket_opener(ch);
+        has_close |= is_bracket_closer(ch);
         if has_open && has_close {
             break;
         }

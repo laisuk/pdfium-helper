@@ -25,7 +25,7 @@ pub fn print_progress(page: i32, total: i32, text: &str) {
     let percent = page * 100 / total.max(1);
 
     let msg = format!(
-        "[{}/{}] ({:3}%) Extracted {} chars",
+        "Loading [{}/{}] ({:3}%) Extracted {} chars",
         page,
         total,
         percent,

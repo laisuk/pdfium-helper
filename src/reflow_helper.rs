@@ -246,9 +246,7 @@ const HEADING_KEYWORDS: &[&str] = &[
 
 const CHAPTER_MARKERS: &[char] = &['章', '节', '部', '卷', '節', '回'];
 const INVALID_AFTER_MARKER: &[char] = &['分', '合'];
-const HEADING_REJECT_PUNCT: &[char] = &[
-    '，', ',', '。', '！', '？', '；',
-];
+const HEADING_REJECT_PUNCT: &[char] = &['，', ',', '。', '！', '？', '；'];
 
 const CJK_NUMERALS: &[char] = &['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
 

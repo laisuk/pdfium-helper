@@ -9,9 +9,13 @@ type FPDF_PAGE = *mut core::ffi::c_void;
 type FPDF_TEXTPAGE = *mut core::ffi::c_void;
 
 #[cfg(target_os = "windows")]
+// macro_rules! pdfium_fn {
+//     (fn($($arg:ty),*) -> $ret:ty) => { extern "system" fn($($arg),*) -> $ret };
+//     (fn($($arg:ty),*)) => { extern "system" fn($($arg),*) };
+// }
 macro_rules! pdfium_fn {
-    (fn($($arg:ty),*) -> $ret:ty) => { extern "system" fn($($arg),*) -> $ret };
-    (fn($($arg:ty),*)) => { extern "system" fn($($arg),*) };
+    (fn($($arg:ty),*) -> $ret:ty) => { extern "C" fn($($arg),*) -> $ret };
+    (fn($($arg:ty),*)) => { extern "C" fn($($arg),*) };
 }
 
 #[cfg(not(target_os = "windows"))]

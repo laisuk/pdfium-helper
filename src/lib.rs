@@ -8,6 +8,7 @@ pub use pdfium_text::{
     extract_pdf_pages_with_callback_pdfium,
     extract_pdf_text_pdfium,
     PdfiumExtractError,
+    print_error,
 };
 pub use reflow_helper::reflow_cjk_paragraphs;
 pub use utils::*;

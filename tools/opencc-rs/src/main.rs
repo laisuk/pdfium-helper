@@ -1,12 +1,14 @@
 mod office_converter;
-
 use office_converter::OfficeConverter;
 
 use clap::{Arg, ArgMatches, Command};
 use encoding_rs::Encoding;
 use encoding_rs_io::DecodeReaderBytesBuilder;
 use opencc_fmmseg::OpenCC;
-use pdfium_helper::{extract_pdf_pages_with_callback_pdfium, reflow_cjk_paragraphs, PdfiumLibrary};
+use pdfium_helper::{
+    extract_pdf_pages_with_callback_pdfium, reflow_cjk_paragraphs, PdfiumExtractError,
+    PdfiumLibrary,
+};
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, IsTerminal, Read, Write};
@@ -16,7 +18,7 @@ const CONFIG_LIST: [&str; 16] = [
     "tw2t", "tw2tp", "hk2t", "t2jp", "jp2t",
 ];
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let matches = Command::new("opencc-rs")
         .about("OpenCC Rust: Command Line Open Chinese Converter")
         .subcommand_required(true)
@@ -91,11 +93,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .get_matches();
 
-    match matches.subcommand() {
+    let result = match matches.subcommand() {
         Some(("convert", sub)) => handle_convert(sub),
         Some(("office", sub)) => handle_office(sub),
         Some(("pdf", sub)) => handle_pdf(sub),
         _ => unreachable!(),
+    };
+
+    if let Err(e) = result {
+        if let Some(pe) = e.downcast_ref::<PdfiumExtractError>() {
+            pdfium_helper::print_error(pe);
+        } else {
+            eprintln!("Error: {e}");
+        }
+        std::process::exit(1);
     }
 }
 
@@ -316,7 +327,7 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    println!("Extracting PDF page-by-page with PDFium: {input_file}");
+    println!("Extracting PDF page-by-page with PDFium: {input_norm}");
 
     // Load Pdfium native (dev + release friendly)
     let (pdfium, lib_path) = PdfiumLibrary::load_with_fallbacks()?;
@@ -325,7 +336,7 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let mut pages: Vec<String> = Vec::new();
 
     // Page-by-page extraction with progress
-    extract_pdf_pages_with_callback_pdfium(&pdfium, input_file, |page, total, text| {
+    extract_pdf_pages_with_callback_pdfium(&pdfium, &input_norm, |page, total, text| {
         // same progress style you like
         pdfium_helper::print_progress(page, total, text);
 

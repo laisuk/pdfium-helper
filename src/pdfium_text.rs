@@ -2,7 +2,6 @@
 
 use crate::pdfium_loader::{PdfiumLibrary, PdfiumLoadError};
 use std::sync::OnceLock;
-use thiserror::Error;
 
 type FPDF_DOCUMENT = *mut core::ffi::c_void;
 type FPDF_PAGE = *mut core::ffi::c_void;
@@ -28,14 +27,107 @@ type FPDFText_LoadPage = pdfium_fn!(fn(FPDF_PAGE) -> FPDF_TEXTPAGE);
 type FPDFText_ClosePage = pdfium_fn!(fn(FPDF_TEXTPAGE));
 type FPDFText_CountChars = pdfium_fn!(fn(FPDF_TEXTPAGE) -> i32);
 type FPDFText_GetText = pdfium_fn!(fn(FPDF_TEXTPAGE, i32, i32, *mut u16) -> i32);
+// ✅ NEW:
+type FPDF_GetLastError = pdfium_fn!(fn() -> u32);
 
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum PdfiumExtractError {
     #[error(transparent)]
     Load(#[from] PdfiumLoadError),
 
-    #[error("pdfium failed to load document: {0}")]
-    LoadDocument(String),
+    #[error("failed to open PDF")]
+    LoadDocument {
+        path: String,
+        error: PdfiumLastError,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub enum PdfiumLastError {
+    Success = 0,
+    Unknown = 1,
+    File = 2,
+    Format = 3,
+    Password = 4,
+    Security = 5,
+    Page = 6,
+    Other = 0xFFFF_FFFF,
+}
+
+impl From<u32> for PdfiumLastError {
+    fn from(v: u32) -> Self {
+        match v {
+            0 => Self::Success,
+            1 => Self::Unknown,
+            2 => Self::File,
+            3 => Self::Format,
+            4 => Self::Password,
+            5 => Self::Security,
+            6 => Self::Page,
+            _ => Self::Other,
+        }
+    }
+}
+
+impl std::fmt::Display for PdfiumLastError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // short “name” only
+        let name = match *self {
+            PdfiumLastError::Success => "Success",
+            PdfiumLastError::Unknown => "Unknown",
+            PdfiumLastError::File => "File",
+            PdfiumLastError::Format => "Format",
+            PdfiumLastError::Password => "Password",
+            PdfiumLastError::Security => "Security",
+            PdfiumLastError::Page => "Page",
+            PdfiumLastError::Other => "Other",
+        };
+        f.write_str(name)
+    }
+}
+
+impl PdfiumLastError {
+    pub fn message(self) -> &'static str {
+        match self {
+            Self::Success => "no error reported",
+            Self::Unknown => "unknown error",
+            Self::File => "cannot open file (missing / permission / IO error)",
+            Self::Format => "invalid or corrupted PDF format",
+            Self::Password => "PDF is password protected",
+            Self::Security => "PDF security handler blocked access",
+            Self::Page => "page processing error",
+            Self::Other => "unrecognized PDFium error code",
+        }
+    }
+
+    pub fn hint(self) -> &'static str {
+        match self {
+            Self::File =>
+                "Check the file path and permissions. Network drives (e.g. R:\\) may fail; try copying the PDF to a local disk.",
+            Self::Password =>
+                "Decrypt the PDF first or provide a password (if supported).",
+            Self::Format =>
+                "Try opening the PDF in a viewer; re-export or re-download if it fails.",
+            _ =>
+                "Run with --verbose and include PDF path + pdfium version when reporting.",
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub fn print_error(e: &PdfiumExtractError) {
+    match e {
+        PdfiumExtractError::LoadDocument { path, error } => {
+            eprintln!("Error: failed to open PDF");
+            eprintln!("  Path   : {}", path);
+            eprintln!("  PDFium : {} — {}", error, error.message());
+            eprintln!("  Hint   : {}", error.hint());
+        }
+        other => {
+            eprintln!("Error: {other}");
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -52,6 +144,7 @@ struct PdfiumFns {
     text_close_page: FPDFText_ClosePage,
     text_count_chars: FPDFText_CountChars,
     text_get_text: FPDFText_GetText,
+    get_last_error: FPDF_GetLastError, // ✅ NEW
 }
 
 impl PdfiumFns {
@@ -68,6 +161,7 @@ impl PdfiumFns {
             text_close_page: lib.get(b"FPDFText_ClosePage\0")?,
             text_count_chars: lib.get(b"FPDFText_CountChars\0")?,
             text_get_text: lib.get(b"FPDFText_GetText\0")?,
+            get_last_error: lib.get(b"FPDF_GetLastError\0")?, // ✅
         })
     }
 }
@@ -147,13 +241,20 @@ where
     // init once per process (safer than calling init/destroy per call if you multi-call in CLI).
     PDFIUM_INIT_ONCE.get_or_init(|| (fns.init)());
 
-    // Pdfium expects UTF-8 file path bytes (like your Python `encode("utf-8")`). :contentReference[oaicite:9]{index=9}
-    let c_path = std::ffi::CString::new(path)
-        .map_err(|_| PdfiumExtractError::LoadDocument(path.to_string()))?;
+    // PDFium expects a C string path (NUL-terminated). `CString::new` fails if the path contains an interior '\0'.
+    let c_path =
+        std::ffi::CString::new(path.as_bytes()).map_err(|_| PdfiumExtractError::LoadDocument {
+            path: path.to_string(),
+            error: PdfiumLastError::Unknown,
+        })?;
 
     let doc = (fns.load_document)(c_path.as_ptr(), std::ptr::null());
     if doc.is_null() {
-        return Err(PdfiumExtractError::LoadDocument(path.to_string()));
+        let code = (fns.get_last_error)(); // FPDF_GetLastError
+        return Err(PdfiumExtractError::LoadDocument {
+            path: path.to_string(),
+            error: PdfiumLastError::from(code),
+        });
     }
 
     // Ensure doc closed

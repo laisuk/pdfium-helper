@@ -98,7 +98,7 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
         let is_short_heading = is_heading_like(&line_text);
         let is_metadata = is_metadata_line(&line_text);
 
-        let mut flush_buffer_and_push_line = |line: &str| {
+        let mut flush_buffer_and_emit_standalone = |line: &str| {
             if !buffer.is_empty() {
                 segments.push(std::mem::take(&mut buffer));
                 dialog_state.reset();
@@ -107,11 +107,11 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
         };
 
         if is_metadata {
-            flush_buffer_and_push_line(&line_text);
+            flush_buffer_and_emit_standalone(&line_text);
             continue;
         }
         if is_title_heading {
-            flush_buffer_and_push_line(&line_text);
+            flush_buffer_and_emit_standalone(&line_text);
             continue;
         }
 
@@ -835,7 +835,7 @@ pub fn has_unclosed_bracket(s: &str) -> bool {
 
 /// Level-2 normalized sentence boundary detection, INCLUDING OCR artifacts:
 /// - ASCII '.' / ':' at end-of-line in mostly-CJK text (treat like '。' / '：')
-/// - ASCII '.' before closers: `.”` / `.」` / `.）` (treat like '。' before quote/bracket)
+/// - ASCII '.' before closers: `“.”` / `.」` / `.）` (treat like '。' before quote/bracket)
 ///
 /// Assumptions (already in your codebase):
 /// - `is_mostly_cjk(s: &str) -> bool`

@@ -31,7 +31,7 @@ pub fn detect_platform_folder() -> Result<String, PdfiumLoadError> {
             "aarch64" => "arm64",
             "x86_64" => "x64",
             "x86" | "i686" => "x86",
-            other => {
+            _other => {
                 // best effort: treat unknown 64-bit as x64, else x86
                 if cfg!(target_pointer_width = "64") {
                     "x64"

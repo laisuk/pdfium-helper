@@ -115,7 +115,7 @@ impl PdfiumLastError {
     }
 }
 
-#[allow(dead_code)]
+// #[allow(dead_code)]
 pub fn print_error(e: &PdfiumExtractError) {
     match e {
         PdfiumExtractError::LoadDocument { path, error } => {

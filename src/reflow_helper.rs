@@ -62,9 +62,10 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
         // 4) Empty line
         if heading_probe.trim().is_empty() {
             if !add_pdf_page_header && !buffer.is_empty() {
+                let buffet_text = buffer.as_str();
                 // NEW: If dialog is unclosed, always treat blank line as soft (cross-page artifact).
                 // Never flush mid-dialog just because we saw a blank line.
-                if dialog_state.is_unclosed() {
+                if dialog_state.is_unclosed() && has_unclosed_bracket(buffet_text) {
                     continue;
                 }
 
@@ -122,6 +123,7 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
         }
 
         let buffer_text = buffer.as_str();
+        let has_unclosed_bracket = has_unclosed_bracket(buffer_text);
 
         if is_short_heading {
             let stripped = heading_probe;
@@ -129,7 +131,7 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
             if !buffer.is_empty() {
                 // let buf_text = buffer.as_str();
 
-                if has_unclosed_bracket(buffer_text) {
+                if has_unclosed_bracket {
                     // treat as continuation
                 } else {
                     let bt = buffer_text.trim_end();
@@ -160,7 +162,7 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
 
         // Final strong line punct ending check for line text
         let stripped = line_text.trim_end();
-        if !buffer.is_empty() && !dialog_state.is_unclosed() {
+        if !buffer.is_empty() && !dialog_state.is_unclosed() && !has_unclosed_bracket {
             if let Some(last) = stripped.chars().rev().next() {
                 if is_strong_sentence_end(last) {
                     buffer.push_str(&line_text);
@@ -188,7 +190,7 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
             let trimmed_buffer = buffer_text.trim_end();
             let last = trimmed_buffer.chars().rev().next();
             if let Some(ch) = last {
-                if ch != '，' && ch != ',' && ch != '、' {
+                if ch != '，' && ch != ',' && ch != '、' && !is_cjk_bmp(ch) {
                     segments.push(std::mem::take(&mut buffer));
                     buffer.push_str(&line_text);
                     dialog_state.reset();
@@ -219,7 +221,10 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
         }
 
         // 8a) Strong sentence boundary (handles 。！？, OCR . / :, “.”)
-        if !dialog_state.is_unclosed() && ends_with_sentence_boundary(buffer_text) {
+        if !dialog_state.is_unclosed()
+            && ends_with_sentence_boundary(buffer_text)
+            && !has_unclosed_bracket
+        {
             segments.push(std::mem::take(&mut buffer));
             buffer.push_str(&line_text);
             dialog_state.reset();
@@ -834,18 +839,28 @@ fn is_digit_ascii_or_fullwidth(ch: char) -> bool {
 
 #[inline]
 pub fn has_unclosed_bracket(s: &str) -> bool {
-    let mut has_open = false;
-    let mut has_close = false;
+    let mut stack: smallvec::SmallVec<[char; 4]> = smallvec::SmallVec::new();
 
     for ch in s.chars() {
-        has_open |= is_bracket_opener(ch);
-        has_close |= is_bracket_closer(ch);
-        if has_open && has_close {
-            break;
+        if is_bracket_opener(ch) {
+            stack.push(ch);
+            continue;
+        }
+
+        if is_bracket_closer(ch) {
+            if let Some(open) = stack.pop() {
+                if !is_matching_bracket(open, ch) {
+                    // Mismatched close → treat as unclosed state
+                    return true;
+                }
+            } else {
+                // Closing without opening → ignore (OCR / noise tolerant)
+                continue;
+            }
         }
     }
 
-    has_open && !has_close
+    !stack.is_empty()
 }
 
 // ------ Sentence Boundary start ------ //

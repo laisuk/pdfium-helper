@@ -62,10 +62,12 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
         // 4) Empty line
         if heading_probe.trim().is_empty() {
             if !add_pdf_page_header && !buffer.is_empty() {
-                let buffet_text = buffer.as_str();
+                let buffer_text = buffer.as_str();
                 // NEW: If dialog is unclosed, always treat blank line as soft (cross-page artifact).
                 // Never flush mid-dialog just because we saw a blank line.
-                if dialog_state.is_unclosed() && has_unclosed_bracket(buffet_text) {
+                // Any unclosed structural enclosure (dialog OR brackets) suppresses blank-line flush.
+                // Chinese prose may span multiple paragraphs inside （……） or “……”.
+                if dialog_state.is_unclosed() || has_unclosed_bracket(buffer_text) {
                     continue;
                 }
 
@@ -837,30 +839,38 @@ fn is_digit_ascii_or_fullwidth(ch: char) -> bool {
     ch >= '０' && ch <= '９'
 }
 
+// NOTE:
+// This function is intentionally pessimistic.
+// Any stray or mismatched bracket is treated as "unclosed"
+// to prevent paragraph flush across PDF page boundaries.
 #[inline]
 pub fn has_unclosed_bracket(s: &str) -> bool {
     let mut stack: smallvec::SmallVec<[char; 4]> = smallvec::SmallVec::new();
+    let mut seen_bracket = false;
 
     for ch in s.chars() {
         if is_bracket_opener(ch) {
+            seen_bracket = true;
             stack.push(ch);
             continue;
         }
 
         if is_bracket_closer(ch) {
-            if let Some(open) = stack.pop() {
-                if !is_matching_bracket(open, ch) {
-                    // Mismatched close → treat as unclosed state
-                    return true;
-                }
-            } else {
-                // Closing without opening → ignore (OCR / noise tolerant)
-                continue;
+            seen_bracket = true;
+
+            // STRICT: stray closer = unsafe (cross-page protection)
+            let open = match stack.pop() {
+                Some(o) => o,
+                None => return true,
+            };
+
+            if !is_matching_bracket(open, ch) {
+                return true;
             }
         }
     }
 
-    !stack.is_empty()
+    seen_bracket && !stack.is_empty()
 }
 
 // ------ Sentence Boundary start ------ //

@@ -148,7 +148,7 @@ pub fn is_bracket_closer(ch: char) -> bool {
 
 #[inline]
 pub fn is_allowed_postfix_closer(ch: char) -> bool {
-    matches!(ch, '）' | ')' )
+    matches!(ch, '）' | ')')
 }
 
 #[inline]

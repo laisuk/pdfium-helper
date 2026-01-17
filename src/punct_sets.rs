@@ -147,6 +147,11 @@ pub fn is_bracket_closer(ch: char) -> bool {
 }
 
 #[inline]
+pub fn is_allowed_postfix_closer(ch: char) -> bool {
+    matches!(ch, '）' | ')' )
+}
+
+#[inline]
 pub fn is_matching_bracket(open: char, close: char) -> bool {
     BRACKET_PAIRS.iter().any(|&(o, c)| o == open && c == close)
 }
@@ -154,6 +159,27 @@ pub fn is_matching_bracket(open: char, close: char) -> bool {
 #[inline]
 pub fn is_strong_sentence_end(ch: char) -> bool {
     matches!(ch, '。' | '！' | '？' | '!' | '?')
+}
+
+#[inline]
+pub fn is_comma_like(ch: char) -> bool {
+    matches!(ch, '，' | ',' | '、')
+}
+
+#[inline(always)]
+pub fn contains_any_comma_like(s: &str) -> bool {
+    s.chars().any(is_comma_like)
+}
+
+#[inline]
+pub fn is_colon_like(ch: char) -> bool {
+    matches!(ch, '：' | ':')
+}
+
+#[inline]
+pub fn ends_with_colon_like(s: &str) -> bool {
+    let t = s.trim_end();
+    t.ends_with('：') || t.ends_with(":")
 }
 
 #[inline]
@@ -315,8 +341,8 @@ pub fn ends_with_sentence_boundary(s: &str) -> bool {
         return true;
     }
 
-    // 3) Quote closers after strong end, plus OCR artifact `.“”` / `.」` / `.）`.
-    if is_dialog_closer(last) || last == '）' {
+    // 3) Quote closers + Allowed postfix closer after strong end, plus OCR artifact `.“”` / `.」` / `.）`.
+    if is_dialog_closer(last) || is_allowed_postfix_closer(last) {
         if let Some(prev_non_ws) = find_prev_non_whitespace_char_index(s, last_non_ws) {
             let prev = nth_char(s, prev_non_ws);
 
@@ -336,7 +362,7 @@ pub fn ends_with_sentence_boundary(s: &str) -> bool {
     // }
 
     // 4) Full-width colon as a weak boundary (common: "他说：" then dialog next line)
-    if last == '：' && is_mostly_cjk(s) {
+    if is_colon_like(last) && is_mostly_cjk(s) {
         return true;
     }
 

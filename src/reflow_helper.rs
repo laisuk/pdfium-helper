@@ -137,11 +137,13 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
                 } else {
                     let bt = buffer_text.trim_end();
                     if let Some(last) = bt.chars().last() {
-                        if last == '，' || last == ',' || last == '、' {
+                        if is_comma_like(last) {
                             // continuation
                         } else {
                             let is_all_cjk = is_all_cjk_ignoring_ws(stripped);
-                            if is_all_cjk && !CJK_PUNCT_END.contains(&last) {
+                            if (is_all_cjk || ends_with_colon_like(stripped))
+                                && !CJK_PUNCT_END.contains(&last)
+                            {
                                 // continuation
                             } else {
                                 segments.push(std::mem::take(&mut buffer));
@@ -191,7 +193,7 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
             let trimmed_buffer = buffer_text.trim_end();
             let last = trimmed_buffer.chars().rev().next();
             if let Some(ch) = last {
-                if ch != '，' && ch != ',' && ch != '、' && !is_cjk_bmp(ch) {
+                if !is_comma_like(ch) && !is_cjk_bmp(ch) {
                     segments.push(std::mem::take(&mut buffer));
                     buffer.push_str(&line_text);
                     dialog_state.reset();
@@ -209,7 +211,7 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
 
         // Colon + dialog continuation
         if let Some(last_char) = buffer_text.chars().rev().find(|c| !c.is_whitespace()) {
-            if last_char == '：' || last_char == ':' {
+            if is_colon_like(last_char) {
                 let after_indent = line_text.trim_start_matches(|ch| ch == ' ' || ch == '\u{3000}');
                 if let Some(first_ch) = after_indent.chars().next() {
                     if DIALOG_OPENERS.contains(&first_ch) {
@@ -512,7 +514,7 @@ fn is_heading_like(s: &str) -> bool {
     };
 
     if let Some(last) = s.chars().last() {
-        if (last == '：' || last == ':') && len < max_len {
+        if is_colon_like(last) && len < max_len {
             let body = strip_last_char(s);
             if is_all_cjk_no_ws(body) {
                 return true;
@@ -523,7 +525,7 @@ fn is_heading_like(s: &str) -> bool {
         }
     }
 
-    if s.contains('，') || s.contains(',') || s.contains('、') {
+    if contains_any_comma_like(s) {
         return false;
     }
 

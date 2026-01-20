@@ -4,6 +4,7 @@
 //! - Python bindings (thin wrapper)
 //! - CLI (opencc-rs PDF / office / etc.)
 
+use crate::cjk_text::*;
 use crate::punct_sets::*;
 
 /// Reflow CJK paragraphs from PDF-extracted text.
@@ -43,7 +44,7 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
 
         // 1.2 Visual divider line (box drawing / ---- / === / *** / ★★★ etc.)
         // Always force paragraph breaks.
-        if is_box_drawing_line(probe) {
+        if is_visual_divider_line(probe) {
             if !buffer.is_empty() {
                 segments.push(std::mem::take(&mut buffer));
                 dialog_state.reset();
@@ -124,48 +125,71 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
         }
 
         let buffer_text = buffer.as_str();
-        let has_unclosed_bracket = has_unclosed_bracket(buffer_text);
+        let buffer_has_unclosed_bracket = has_unclosed_bracket(buffer_text);
 
         if is_short_heading {
             let stripped = heading_probe;
 
-            if !buffer.is_empty() {
-                // let buf_text = buffer.as_str();
+            // same as C# currentLooksLikeContinuationMarker
+            let is_all_cjk = is_all_cjk_ignoring_ws(stripped);
+            let current_looks_like_cont_marker = is_all_cjk
+                || ends_with_colon_like(stripped)
+                || ends_with_allowed_postfix_closer(stripped);
 
-                if has_unclosed_bracket {
-                    // treat as continuation
-                } else {
-                    let bt = buffer_text.trim_end();
-                    if let Some(last) = bt.chars().last() {
-                        if is_comma_like(last) {
-                            // continuation
-                        } else {
-                            let is_all_cjk = is_all_cjk_ignoring_ws(stripped);
-                            if (is_all_cjk || ends_with_colon_like(stripped))
-                                && !CJK_PUNCT_END.contains(&last)
-                            {
-                                // continuation
-                            } else {
-                                segments.push(std::mem::take(&mut buffer));
-                                dialog_state.reset();
-                                segments.push(line_text.clone());
-                                continue;
-                            }
-                        }
-                    } else {
-                        segments.push(line_text.clone());
-                        continue;
-                    }
-                }
+            let split_as_heading: bool;
+
+            if buffer.is_empty() {
+                // Start of document / just flushed
+                split_as_heading = true;
+            } else if buffer_has_unclosed_bracket {
+                // Unsafe previous paragraph → must be continuation
+                split_as_heading = false;
             } else {
+                // Buffer exists, bracket is safe; inspect previous ending punctuation
+                let bt = buffer_text.trim_end();
+
+                if let Some(last) = bt.chars().last() {
+                    let prev_ends_with_comma_like = is_comma_like(last);
+
+                    // same idea as IsClauseOrEndPunct(last)
+                    // (The code already uses CJK_PUNCT_END for this)
+                    let prev_ends_with_sentence_punct = CJK_PUNCT_END.contains(&last);
+
+                    // Comma-ending → continuation
+                    if prev_ends_with_comma_like {
+                        split_as_heading = false;
+                    }
+                    // All-CJK / colon-like / postfix-closer “heading-ish line”
+                    // + previous not ended → continuation
+                    else if current_looks_like_cont_marker && !prev_ends_with_sentence_punct {
+                        split_as_heading = false;
+                    } else {
+                        split_as_heading = true;
+                    }
+                } else {
+                    // Buffer is whitespace-only → treat like empty
+                    split_as_heading = true;
+                }
+            }
+
+            if split_as_heading {
+                // If we have a real previous paragraph, flush it first
+                if !buffer.is_empty() {
+                    segments.push(std::mem::take(&mut buffer));
+                    dialog_state.reset();
+                }
+
+                // Current line becomes a standalone heading
                 segments.push(line_text.clone());
                 continue;
             }
+
+            // else: fall through → normal merge/continuation logic below
         }
 
         // Final strong line punct ending check for line text
         let stripped = line_text.trim_end();
-        if !buffer.is_empty() && !dialog_state.is_unclosed() && !has_unclosed_bracket {
+        if !buffer.is_empty() && !dialog_state.is_unclosed() && !buffer_has_unclosed_bracket {
             if let Some(last) = stripped.chars().rev().next() {
                 if is_strong_sentence_end(last) {
                     buffer.push_str(&line_text);
@@ -178,7 +202,7 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
         }
 
         // 7) Dialog detection
-        let current_is_dialog_start = is_dialog_start(&line_text);
+        let current_is_dialog_start = begins_with_dialog_opener(&line_text);
 
         // First line of a new paragraph
         if buffer.is_empty() {
@@ -209,24 +233,59 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
             }
         }
 
-        // Colon + dialog continuation
-        if let Some(last_char) = buffer_text.chars().rev().find(|c| !c.is_whitespace()) {
-            if is_colon_like(last_char) {
-                let after_indent = line_text.trim_start_matches(|ch| ch == ' ' || ch == '\u{3000}');
-                if let Some(first_ch) = after_indent.chars().next() {
-                    if DIALOG_OPENERS.contains(&first_ch) {
-                        buffer.push_str(&line_text);
-                        dialog_state.update(&line_text);
-                        continue;
-                    }
+        // 🔸 9b) Dialog end line: ends with dialog closer.
+        // Flush when the char before closer is strong end,
+        // and bracket safety is satisfied (with a narrow typo override).
+        if let Some((last_ch, prev_ch)) = last_two_non_whitespace(stripped) {
+            if is_dialog_closer(last_ch) {
+                // Check punctuation right before the closer (e.g., “？” / “。”)
+                let punct_before_closer_is_strong = is_clause_or_end_punct(prev_ch);
+
+                // Snapshot bracket safety BEFORE appending current line
+                let buffer_has_bracket_issue = buffer_has_unclosed_bracket;
+                let line_has_bracket_issue = has_unclosed_bracket(stripped);
+
+                // Append current line into buffer, then update dialog state
+                buffer.push_str(stripped);
+                dialog_state.update(stripped);
+
+                // Allow flush if:
+                // - dialog is closed after this line
+                // - punctuation before closer is a strong end
+                // - and either:
+                //     (a) buffer has no bracket issue, OR
+                //     (b) buffer has bracket issue but this line itself is the culprit (OCR/typo),
+                //         so allow a dialog-end flush anyway.
+                if !dialog_state.is_unclosed()
+                    && punct_before_closer_is_strong
+                    && (!buffer_has_bracket_issue || line_has_bracket_issue)
+                {
+                    segments.push(std::mem::take(&mut buffer));
+                    dialog_state.reset();
                 }
+
+                continue;
             }
         }
+
+        // Colon + dialog continuation
+        // if let Some(last_char) = buffer_text.chars().rev().find(|c| !c.is_whitespace()) {
+        //     if is_colon_like(last_char) {
+        //         let after_indent = line_text.trim_start_matches(|ch| ch == ' ' || ch == '\u{3000}');
+        //         if let Some(first_ch) = after_indent.chars().next() {
+        //             if DIALOG_OPENERS.contains(&first_ch) {
+        //                 buffer.push_str(&line_text);
+        //                 dialog_state.update(&line_text);
+        //                 continue;
+        //             }
+        //         }
+        //     }
+        // }
 
         // 8a) Strong sentence boundary (handles 。！？, OCR . / :, “.”)
         if !dialog_state.is_unclosed()
             && ends_with_sentence_boundary(buffer_text)
-            && !has_unclosed_bracket
+            && !buffer_has_unclosed_bracket
         {
             segments.push(std::mem::take(&mut buffer));
             buffer.push_str(&line_text);
@@ -334,31 +393,6 @@ fn is_metadata_line(line: &str) -> bool {
     };
 
     !DIALOG_OPENERS.contains(&first_after)
-}
-
-#[inline]
-pub fn is_box_drawing_line(s: &str) -> bool {
-    if s.trim().is_empty() {
-        return false;
-    }
-
-    let mut total = 0usize;
-
-    for ch in s.chars() {
-        if ch.is_whitespace() {
-            continue;
-        }
-        total += 1;
-
-        match ch {
-            '\u{2500}'..='\u{257F}' => {}
-            '-' | '=' | '_' | '~' | '～' => {}
-            '*' | '＊' | '★' | '☆' => {}
-            _ => return false,
-        }
-    }
-
-    total >= 3
 }
 
 #[allow(dead_code)]
@@ -469,14 +503,6 @@ fn is_chapter_ending_line(s: &str) -> bool {
         .is_some_and(|last| CHAPTER_MARKERS.contains(&last))
 }
 
-fn is_dialog_start(s: &str) -> bool {
-    let trimmed = s.trim_start_matches(|ch| ch == ' ' || ch == '\u{3000}');
-    trimmed
-        .chars()
-        .next()
-        .is_some_and(|ch| is_dialog_opener(ch))
-}
-
 fn is_heading_like(s: &str) -> bool {
     let s = s.trim();
     if s.is_empty() {
@@ -517,6 +543,11 @@ fn is_heading_like(s: &str) -> bool {
         if is_colon_like(last) && len < max_len {
             let body = strip_last_char(s);
             if is_all_cjk_no_ws(body) {
+                return true;
+            }
+        }
+        if is_allowed_postfix_closer(last) {
+            if !contains_any_comma_like(s) {
                 return true;
             }
         }
@@ -568,89 +599,6 @@ fn is_heading_like(s: &str) -> bool {
             return true;
         }
         if all_ascii && has_letter {
-            return true;
-        }
-    }
-
-    false
-}
-
-#[inline]
-pub fn is_all_ascii(s: &str) -> bool {
-    s.is_ascii()
-}
-
-#[inline]
-pub fn is_all_cjk(s: &str, allow_whitespace: bool) -> bool {
-    let mut seen = false;
-
-    for ch in s.chars() {
-        if ch.is_whitespace() {
-            if !allow_whitespace {
-                return false;
-            }
-            continue;
-        }
-
-        seen = true;
-
-        if !is_cjk_bmp(ch) {
-            return false;
-        }
-    }
-
-    // false for empty / whitespace-only
-    seen
-}
-
-#[inline]
-pub fn is_all_cjk_ignoring_ws(s: &str) -> bool {
-    is_all_cjk(s, true)
-}
-
-#[inline]
-pub fn is_all_cjk_no_ws(s: &str) -> bool {
-    is_all_cjk(s, false)
-}
-
-#[inline]
-pub fn is_mixed_cjk_ascii(s: &str) -> bool {
-    let mut has_cjk = false;
-    let mut has_ascii = false;
-
-    for ch in s.chars() {
-        // Neutral ASCII (allowed, but doesn't count as ASCII content)
-        match ch {
-            ' ' | '-' | '/' | ':' | '.' => continue,
-            _ => {}
-        }
-
-        let u = ch as u32;
-
-        if u <= 0x7F {
-            // ASCII range
-            if ch.is_ascii_alphanumeric() {
-                has_ascii = true;
-            } else {
-                // Disallowed ASCII symbol
-                return false;
-            }
-        }
-        // Full-width digits: '０'..'９'
-        else if (0xFF10..=0xFF19).contains(&u) {
-            has_ascii = true;
-        }
-        // CJK BMP
-        else if is_cjk_bmp(ch) {
-            has_cjk = true;
-        }
-        // Anything else is invalid
-        else {
-            return false;
-        }
-
-        // Early exit (same as C#)
-        if has_cjk && has_ascii {
             return true;
         }
     }
@@ -829,24 +777,5 @@ impl DialogState {
             || self.corner_bold > 0
             || self.corner_top > 0
             || self.corner_wide > 0
-    }
-}
-
-fn strip_halfwidth_indent_keep_fullwidth(s: &str) -> &str {
-    let mut start_byte = 0;
-    for (idx, ch) in s.char_indices() {
-        if ch == ' ' {
-            start_byte = idx + ch.len_utf8();
-            continue;
-        }
-        break;
-    }
-    &s[start_byte..]
-}
-
-fn strip_last_char(s: &str) -> &str {
-    match s.char_indices().last() {
-        Some((idx, _)) => &s[..idx],
-        None => s,
     }
 }

@@ -11,6 +11,7 @@
 use once_cell::sync::Lazy;
 use smallvec::SmallVec;
 use std::collections::HashSet;
+use crate::cjk_text;
 
 /// Broad CJK punctuation that can appear at the end of a logical unit.
 ///
@@ -20,6 +21,11 @@ pub const CJK_PUNCT_END: &[char] = &[
     '。', '！', '？', '；', '：', '…', '—', '”', '」', '’', '』', '）', '】', '》', '〗', '〔',
     '〕', '〉', '⟩', '］', '｝', '》', '＞', '.', '?', '!',
 ];
+
+#[inline]
+pub fn is_clause_or_end_punct(ch: char) -> bool {
+    CJK_PUNCT_END.contains(&ch)
+}
 
 /// Trailing brackets that may appear after a chapter marker, e.g. "第十章】".
 pub const CHAPTER_TRAIL_BRACKETS: &[char] = &[
@@ -152,6 +158,22 @@ pub fn is_allowed_postfix_closer(ch: char) -> bool {
 }
 
 #[inline]
+pub fn ends_with_allowed_postfix_closer(s: &str) -> bool {
+    // Trim only trailing whitespace (no allocation)
+    let s = s.trim_end();
+
+    if s.is_empty() {
+        return false;
+    }
+
+    // Last non-whitespace character
+    s.chars()
+        .rev()
+        .next()
+        .map_or(false, is_allowed_postfix_closer)
+}
+
+#[inline]
 pub fn is_matching_bracket(open: char, close: char) -> bool {
     BRACKET_PAIRS.iter().any(|&(o, c)| o == open && c == close)
 }
@@ -194,6 +216,7 @@ fn nth_char(s: &str, idx: usize) -> char {
 }
 
 /// Last non-whitespace char index (char index).
+#[allow(dead_code)]
 pub fn find_last_non_whitespace_char_index(s: &str) -> Option<usize> {
     let mut char_pos = s.chars().count();
 
@@ -207,6 +230,7 @@ pub fn find_last_non_whitespace_char_index(s: &str) -> Option<usize> {
 }
 
 /// Previous non-whitespace char index strictly before `end_exclusive` (char index).
+#[allow(dead_code)]
 pub fn find_prev_non_whitespace_char_index(s: &str, end_exclusive: usize) -> Option<usize> {
     let mut char_pos = end_exclusive;
 
@@ -224,56 +248,35 @@ pub fn find_prev_non_whitespace_char_index(s: &str, end_exclusive: usize) -> Opt
     None
 }
 
-/// Minimal CJK checker (BMP focused).
-/// Designed for heading / structure heuristics, not full Unicode linguistics.
 #[inline]
-pub fn is_cjk_bmp(ch: char) -> bool {
-    let c = ch as u32;
-    (0x3400..=0x4DBF).contains(&c)
-        || (0x4E00..=0x9FFF).contains(&c)
-        || (0xF900..=0xFAFF).contains(&c)
+pub fn last_non_whitespace(s: &str) -> Option<char> {
+    s.chars().rev().find(|c| !c.is_whitespace())
 }
 
+/// Returns (byte_index, char) of the last non-whitespace char.
+#[allow(dead_code)]
 #[inline]
-pub fn is_digit_ascii_or_fullwidth(ch: char) -> bool {
-    // ASCII digits
-    if ('0'..='9').contains(&ch) {
-        return true;
-    }
-    // FULLWIDTH digits
-    ('０'..='９').contains(&ch)
+pub fn last_non_whitespace_idx(s: &str) -> Option<(usize, char)> {
+    s.char_indices().rev().find(|(_, c)| !c.is_whitespace())
 }
 
-/// “Mostly CJK” heuristic used by a few boundary rules.
-///
-/// - Counts CJK letters as CJK.
-/// - Counts ASCII alphabetic letters as ASCII.
-/// - Treats digits and whitespace as neutral.
+/// Returns (last, prev) non-whitespace chars (no indices).
 #[inline]
-pub fn is_mostly_cjk(s: &str) -> bool {
-    let mut cjk = 0usize;
-    let mut ascii = 0usize;
+pub fn last_two_non_whitespace(s: &str) -> Option<(char, char)> {
+    let mut it = s.chars().rev().filter(|c| !c.is_whitespace());
+    let last = it.next()?;
+    let prev = it.next()?;
+    Some((last, prev))
+}
 
-    for ch in s.chars() {
-        if ch.is_whitespace() {
-            continue;
-        }
-        if is_digit_ascii_or_fullwidth(ch) {
-            continue;
-        }
+/// Returns ((last_i,last),(prev_i,prev)) in byte indices.
+#[inline]
+pub fn last_two_non_whitespace_idx(s: &str) -> Option<((usize, char), (usize, char))> {
+    let mut it = s.char_indices().rev().filter(|(_, c)| !c.is_whitespace());
 
-        if is_cjk_bmp(ch) {
-            cjk += 1;
-            continue;
-        }
-
-        // Count ASCII letters only; ASCII punctuation is neutral
-        if ch <= '\u{7F}' && ch.is_ascii_alphabetic() {
-            ascii += 1;
-        }
-    }
-
-    cjk > 0 && cjk >= ascii
+    let last = it.next()?;
+    let prev = it.next()?;
+    Some((last, prev))
 }
 
 /// Cross-page / soft-wrap safety:
@@ -324,12 +327,11 @@ pub fn ends_with_sentence_boundary(s: &str) -> bool {
         return false;
     }
 
-    let last_non_ws = match find_last_non_whitespace_char_index(s) {
-        Some(i) => i,
-        None => return false,
+    // Need index only for OCR rules; grab last + prev with byte indices.
+    let Some(((last_i, last), (prev_i, prev))) = last_two_non_whitespace_idx(s) else {
+        // < 2 non-whitespace chars; still may match strong end on the single char
+        return last_non_whitespace(s).map_or(false, is_strong_sentence_end);
     };
-
-    let last = nth_char(s, last_non_ws);
 
     // 1) Strong sentence enders.
     if is_strong_sentence_end(last) {
@@ -337,32 +339,24 @@ pub fn ends_with_sentence_boundary(s: &str) -> bool {
     }
 
     // 2) OCR '.' / ':' at line end (mostly-CJK).
-    if (last == '.' || last == ':') && is_ocr_cjk_ascii_punct_at_line_end(s, last_non_ws) {
+    if (last == '.' || last == ':') && is_ocr_cjk_ascii_punct_at_line_end(s, last_i) {
         return true;
     }
 
-    // 3) Quote closers + Allowed postfix closer after strong end, plus OCR artifact `.“”` / `.」` / `.）`.
+    // 3) Quote closers + Allowed postfix closer after strong end,
+    //    plus OCR artifact `.“”` / `.」` / `.）`.
     if is_dialog_closer(last) || is_allowed_postfix_closer(last) {
-        if let Some(prev_non_ws) = find_prev_non_whitespace_char_index(s, last_non_ws) {
-            let prev = nth_char(s, prev_non_ws);
+        if is_strong_sentence_end(prev) {
+            return true;
+        }
 
-            if is_strong_sentence_end(prev) {
-                return true;
-            }
-
-            if prev == '.' && is_ocr_cjk_ascii_punct_before_closers(s, prev_non_ws) {
-                return true;
-            }
+        if prev == '.' && is_ocr_cjk_ascii_punct_before_closers(s, prev_i) {
+            return true;
         }
     }
 
-    // 4.0) Bracket closers with mostly CJK. (reserved)
-    // if is_bracket_closer(last) && last_non_ws > 0 && is_mostly_cjk(s) {
-    //     return true;
-    // }
-
     // 4) Full-width colon as a weak boundary (common: "他说：" then dialog next line)
-    if is_colon_like(last) && is_mostly_cjk(s) {
+    if is_colon_like(last) && cjk_text::is_mostly_cjk(s) {
         return true;
     }
 
@@ -384,7 +378,7 @@ fn is_ocr_cjk_ascii_punct_at_line_end(s: &str, punct_index: usize) -> bool {
         return false;
     }
     let prev = nth_char(s, punct_index - 1);
-    is_cjk_bmp(prev) && is_mostly_cjk(s)
+    cjk_text::is_cjk_bmp(prev) && cjk_text::is_mostly_cjk(s)
 }
 
 /// Relaxed OCR: after punct, allow only whitespace and closers (quote/bracket).
@@ -397,7 +391,7 @@ fn is_ocr_cjk_ascii_punct_before_closers(s: &str, punct_index: usize) -> bool {
         return false;
     }
     let prev = nth_char(s, punct_index - 1);
-    is_cjk_bmp(prev) && is_mostly_cjk(s)
+    cjk_text::is_cjk_bmp(prev) && cjk_text::is_mostly_cjk(s)
 }
 
 fn is_at_line_end_ignoring_whitespace(s: &str, index: usize) -> bool {
@@ -446,7 +440,7 @@ pub fn ends_with_cjk_bracket_boundary(s: &str) -> bool {
     }
 
     // 2) Avoid Latin cases like "(test)" or "[1.2]"
-    if !is_mostly_cjk(t) {
+    if !cjk_text::is_mostly_cjk(t) {
         return false;
     }
 
@@ -473,3 +467,36 @@ fn is_bracket_type_balanced(s: &str, open: char, close: char) -> bool {
 }
 
 // ------ Bracket Boundary end ------ //
+
+#[inline]
+pub fn is_visual_divider_line(s: &str) -> bool {
+    if s.trim().is_empty() {
+        return false;
+    }
+
+    let mut total = 0usize;
+
+    for ch in s.chars() {
+        if ch.is_whitespace() {
+            continue;
+        }
+        total += 1;
+
+        match ch {
+            '\u{2500}'..='\u{257F}' => {}
+            '-' | '=' | '_' | '~' | '～' => {}
+            '*' | '＊' | '★' | '☆' => {}
+            _ => return false,
+        }
+    }
+
+    total >= 3
+}
+
+pub fn begins_with_dialog_opener(s: &str) -> bool {
+    let trimmed = s.trim_start_matches(|ch| ch == ' ' || ch == '\u{3000}');
+    trimmed
+        .chars()
+        .next()
+        .is_some_and(|ch| is_dialog_opener(ch))
+}

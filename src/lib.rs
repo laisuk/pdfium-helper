@@ -3,6 +3,7 @@ mod pdfium_text;
 mod reflow_helper;
 mod punct_sets;
 mod utils;
+mod cjk_text;
 
 pub use pdfium_loader::{PdfiumLibrary, PdfiumLoadError,};
 pub use pdfium_text::{
@@ -12,7 +13,8 @@ pub use pdfium_text::{
     print_error,
 };
 pub use reflow_helper::reflow_cjk_paragraphs;
-pub use punct_sets::*;
+// use punct_sets::*;
+// use cjk_text::*;
 pub use utils::*;
 
 // #[cfg(test)]

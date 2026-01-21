@@ -151,7 +151,7 @@ pub fn is_bracket_closer(ch: char) -> bool {
     BRACKET_PAIRS.iter().any(|&(_, close)| close == ch)
 }
 
-/// Try get the matching closing bracket for an opening bracket.
+/// Try to get the matching closing bracket for an opening bracket.
 /// Returns `Some(close)` if the opener is known, otherwise `None`.
 #[inline(always)]
 pub fn try_get_matching_closer(open: char) -> Option<char> {

@@ -27,6 +27,8 @@ fn main() {
             Command::new("convert")
                 .about("Convert plain text using OpenCC")
                 .args(common_args())
+                // 👇 require config for this subcommand
+                .mut_arg("config", |a| a.required(true))
                 .arg(
                     Arg::new("in_enc")
                         .long("in-enc")
@@ -44,6 +46,7 @@ fn main() {
             Command::new("office")
                 .about("Convert Office or EPUB documents using OpenCC")
                 .args(common_args())
+                .mut_arg("config", |a| a.required(true))
                 .arg(
                     Arg::new("format")
                         .short('f')
@@ -89,7 +92,17 @@ fn main() {
                         .long("header")
                         .action(clap::ArgAction::SetTrue)
                         .help("Add PDF page headers like: === [Page 3/120] ==="),
-                ),
+                )
+                .arg(
+                    Arg::new("extract")
+                        .short('e')
+                        .long("extract")
+                        .action(clap::ArgAction::SetTrue)
+                        .help("Extract text from PDF document only (default: false)"),
+                )
+                // 👇 KEY LINE
+                .arg_required_else_help(false)
+                .mut_arg("config", |a| a.required_unless_present("extract")),
         )
         .get_matches();
 
@@ -125,7 +138,7 @@ fn common_args() -> Vec<Arg> {
         Arg::new("config")
             .short('c')
             .long("config")
-            .required(true)
+            // .required(true)
             .value_parser(CONFIG_LIST)
             .help("Conversion configuration"),
         Arg::new("punct")
@@ -297,14 +310,23 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("❌  Input PDF is required for pdf mode (-i/--input)")?;
 
     let output_file = matches.get_one::<String>("output");
-    let config = matches.get_one::<String>("config").unwrap();
     let punctuation = matches.get_flag("punct");
-
     let reflow = matches.get_flag("reflow");
     let compact = matches.get_flag("compact");
     let header = matches.get_flag("header");
+    let extract_only = matches.get_flag("extract");
+    let config = if extract_only {
+        None
+    } else {
+        Some(
+            matches
+                .get_one::<String>("config")
+                .ok_or("❌  --config is required unless --extract is used")?
+                .as_str(),
+        )
+    };
 
-    // ---- default output: <input_stem>_converted.txt (same folder) ----
+    // ---- normalize input path (Windows friendly) ----
     let input_norm: String = if cfg!(windows) {
         input_file.replace(['/', '\\'], &std::path::MAIN_SEPARATOR.to_string())
     } else {
@@ -313,6 +335,7 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
 
     let input_path = std::path::Path::new(&input_norm);
 
+    // ---- default output: <input_stem>_extracted.txt OR _converted.txt ----
     let final_output: std::path::PathBuf = match output_file {
         Some(p) => std::path::PathBuf::from(p),
         None => {
@@ -323,11 +346,21 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("input");
-            parent.join(format!("{stem}_converted.txt"))
+
+            let suffix = if extract_only {
+                "_extracted.txt"
+            } else {
+                "_converted.txt"
+            };
+            parent.join(format!("{stem}{suffix}"))
         }
     };
 
-    println!("Extracting PDF page-by-page with PDFium: {input_norm}");
+    if extract_only {
+        println!("Extracting PDF page-by-page with PDFium (extract-only): {input_norm}");
+    } else {
+        println!("Extracting PDF page-by-page with PDFium: {input_norm}");
+    }
 
     // Load Pdfium native (dev + release friendly)
     let (pdfium, lib_path) = PdfiumLibrary::load_with_fallbacks()?;
@@ -337,10 +370,7 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
 
     // Page-by-page extraction with progress
     extract_pdf_pages_with_callback_pdfium(&pdfium, &input_norm, |page, total, text| {
-        // same progress style you like
         pdfium_helper::print_progress(page, total, text);
-
-        // collect page text
         pages.push(text.to_owned());
     })?;
 
@@ -353,7 +383,7 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         pdfium_helper::format_thousand(extracted.chars().count())
     );
 
-    // Optional reflow
+    // Optional reflow (still valid for extract-only)
     if reflow {
         println!("Reflowing CJK paragraphs...");
         extracted = reflow_cjk_paragraphs(
@@ -362,13 +392,29 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    // OpenCC conversion
-    println!("Converting with OpenCC (config={config}, punct={punctuation}) ...");
+    // ---- extract-only path: write extracted and exit ----
+    if extract_only {
+        write_text_unix_newlines(&final_output, &extracted)?;
+        eprintln!(
+            "✅  PDF extracted.\n📁  Output saved to: {}",
+            final_output.display()
+        );
+        return Ok(());
+    }
+
+    // ---- conversion path ----
+    let Some(config) = config else {
+        unreachable!("--config is required unless --extract is used");
+    };
+
+    println!(
+        "Converting with Opencc-Fmmseg (config={}, punct={}) ...",
+        config, punctuation
+    );
+
     let helper = OpenCC::new();
     let converted = helper.convert(&extracted, config, punctuation);
 
-    // Write as UTF-8 text (Unix newlines are usually nicer for CLI output)
-    // println!("Writing output to: {}", final_output.display());
     write_text_unix_newlines(&final_output, &converted)?;
 
     eprintln!(

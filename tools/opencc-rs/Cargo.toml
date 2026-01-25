@@ -1,6 +1,6 @@
 [package]
 name = "opencc-rs"
-version = "0.8.4"
+version = "0.8.5"
 edition = "2021"
 
 [dependencies]
@@ -17,7 +17,8 @@ zip = { version = "=3.0.0", default-features = false, features = ["deflate"] }
 #time-core = "=0.1.4"
 tempfile = "3.24.0"
 walkdir = "2.5.0"
-opencc-fmmseg = "0.8.4"
+opencc-fmmseg = { git = "https://github.com/laisuk/opencc-fmmseg.git", branch = "master" }
+#opencc-fmmseg = "0.8.4"
 pdfium-helper = {path="../.."}
 
 [build-dependencies]

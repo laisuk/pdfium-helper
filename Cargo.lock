@@ -370,13 +370,11 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencc-fmmseg"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f2a85e987adaa5c71902d681fa73efd7f7c96adc00cd7f9de01d01b959376ba"
+version = "0.8.5"
+source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#533217065aa5e7506f6cb1bf70601d08963ef1a8"
 dependencies = [
  "once_cell",
  "rayon",
- "rayon-core",
  "regex",
  "rustc-hash",
  "serde",
@@ -386,7 +384,7 @@ dependencies = [
 
 [[package]]
 name = "opencc-rs"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "clap",
  "encoding_rs",

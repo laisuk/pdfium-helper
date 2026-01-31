@@ -50,7 +50,7 @@ pub fn detect_platform_folder() -> Result<String, PdfiumLoadError> {
         } else {
             "x64"
         };
-        return Ok(format!("osx-{}", arch));
+        return Ok(format!("macos-{}", arch));
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
@@ -265,7 +265,7 @@ impl PdfiumLibrary {
     /// ```text
     /// pdfium/win-x64/pdfium.dll
     /// pdfium/linux-x64/libpdfium.so
-    /// pdfium/osx-arm64/libpdfium.dylib
+    /// pdfium/macos-arm64/libpdfium.dylib
     /// ```
     ///
     /// This layout is recommended when shipping **multiple platforms** together

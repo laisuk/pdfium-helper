@@ -1,25 +1,43 @@
 # pdfium-helper
 
-**pdfium-helper** is a lightweight Rust helper library that provides safe, ergonomic access to **PDFium**
-for **PDF text extraction** and **CJK-aware paragraph reflow**, designed to be embedded in CLI tools
-such as `opencc-rs`.
+**pdfium-helper** is an **internal Rust helper crate** that provides safe, ergonomic access to **PDFium**
+for **PDF text extraction** and **CJK-aware paragraph reflow**.
 
-This crate focuses strictly on **text extraction** and intentionally avoids rendering,
-OCR, or document editing features.
+It is designed primarily to support **OpenCC tooling** (such as the `opencc-rs` CLI and related
+bindings), and is **not intended to be a general-purpose PDF library**.
+
+This repository is public for **transparency and auditability**.
 
 ---
 
-## Scope and design goals
+## Purpose and scope
 
-- Extract text from **text-embedded PDFs**
-- Page-by-page extraction with callback support
-- Deterministic native library loading
-- High-quality CJK paragraph reflow (novels / ebooks)
-- No OCR
-- No PDF rendering
-- No image-based PDF support
+This crate exists to support a very specific workflow:
 
-The goal is to remain small, predictable, and easy to integrate.
+* Extract readable text from **text-embedded PDFs**
+* Reflow fragmented CJK text into readable paragraphs
+* Feed the result into **OpenCC-based conversion pipelines**
+
+It intentionally avoids broader PDF concerns such as rendering, OCR, or editing.
+
+---
+
+## Design goals
+
+* Reliable text extraction from **text-based PDFs**
+* Page-by-page extraction with callback support
+* Deterministic native PDFium loading
+* High-quality CJK paragraph reflow (novels / ebooks)
+* Small, predictable API surface
+* Easy embedding into CLI tools
+
+### Explicit non-goals
+
+* ❌ OCR
+* ❌ PDF rendering
+* ❌ Annotation or editing
+* ❌ Image-based PDF support
+* ❌ Stable public API guarantees
 
 ---
 
@@ -42,15 +60,15 @@ src/
 └── lib.rs
 ```
 
-Each module has a single responsibility.
+Each module has a **single, well-defined responsibility**.
 
 ---
 
-## Native library loading
+## Native PDFium loading
 
-Native PDFium libraries are **not bundled**.
+Native PDFium libraries are **not bundled** with this crate.
 
-All native loading logic is implemented in `pdfium_loader.rs`.
+All native discovery and loading logic is implemented in `pdfium_loader.rs`.
 
 ### Supported layouts
 
@@ -64,8 +82,8 @@ Two layouts are supported at each search location:
 <dir>/libpdfium.dylib  (macOS)
 ```
 
-This layout is ideal for portable CLI tools where the executable and the Pdfium
-library are placed side-by-side.
+This layout is ideal for portable CLI tools where the executable and the
+PDFium library are placed side-by-side.
 
 #### 2) Bundled layout (multi-platform)
 
@@ -88,7 +106,7 @@ This layout allows shipping multiple platforms together.
 
 ### Load order
 
-The loader attempts the following locations in order:
+The loader attempts the following locations **in order**:
 
 1. `PDFIUM_LIB_DIR` environment variable
 2. Directory containing the current executable
@@ -97,33 +115,32 @@ The loader attempts the following locations in order:
 
 For each location:
 
-- the single-library layout is tried first
-- the bundled layout is tried second
+* the single-library layout is tried first
+* the bundled layout is tried second
 
-The first successfully loaded library is used, and its path is returned for logging
-and diagnostics.
+The first successfully loaded library is used, and its resolved path
+is returned for logging and diagnostics.
 
 ---
 
-## Pdfium binaries
+## PDFium binaries
 
-Prebuilt Pdfium native libraries can be obtained from the
-**pdfium-binaries** GitHub repository:
+Prebuilt PDFium native libraries can be obtained from the
+**pdfium-binaries** project:
 
-> Pdfium native binaries can be obtained from  
-> https://github.com/bblanchon/pdfium-binaries
+> [https://github.com/bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries)
 
-This repository provides ready-to-use Pdfium binaries for common platforms
+This repository provides ready-to-use PDFium binaries for common platforms
 (Windows, Linux, macOS).
 
-You may download either:
+You may supply either:
 
-- A **single native library** (`pdfium.dll`, `libpdfium.so`, `libpdfium.dylib`)
-  and place it next to the executable, or
-- The entire `pdfium/` directory structure and place it next to the executable
+* A **single native library** (`pdfium.dll`, `libpdfium.so`, `libpdfium.dylib`)
+  placed next to the executable, or
+* A bundled `pdfium/` directory containing multiple platforms
 
-`opencc-rs` / `pdfium-helper` will automatically detect and load the correct
-library at runtime.
+`pdfium-helper` (and OpenCC tooling using it) will automatically detect
+and load the correct library at runtime.
 
 ---
 
@@ -133,10 +150,10 @@ PDF text extraction is implemented in `pdfium_text.rs`.
 
 ### Characteristics
 
-- Page-by-page extraction
-- UTF-16 to UTF-8 decoding handled internally
-- Callback-based API for progress reporting
-- No layout reconstruction beyond line-level extraction
+* Page-by-page extraction
+* UTF-16 → UTF-8 decoding handled internally
+* Callback-based API for progress reporting
+* No layout reconstruction beyond line-level extraction
 
 ### Typical usage
 
@@ -150,7 +167,8 @@ extract_pdf_pages_with_callback_pdfium(
 )?;
 ```
 
-This design allows progress reporting, early cancellation, and memory-efficient streaming.
+This design enables progress reporting, early cancellation,
+and memory-efficient streaming.
 
 ---
 
@@ -162,22 +180,22 @@ CJK paragraph reflow is implemented in `reflow_helper.rs`.
 
 PDF text extraction often produces fragmented lines, especially for:
 
-- Chinese novels
-- Japanese ebooks
-- Dialogue-heavy content
+* Chinese novels
+* Japanese ebooks
+* Dialogue-heavy content
 
 The reflow helper merges broken lines, detects paragraph boundaries,
-preserves dialog punctuation, and optionally inserts page headers
+preserves dialogue punctuation, and optionally inserts page headers
 or compacts whitespace.
 
 ### What reflow does NOT do
 
-- It does not infer semantic structure
-- It does not perform language detection
-- It does not modify wording or meaning
-- It does not reorder content
+* It does not infer semantic structure
+* It does not perform language detection
+* It does not modify wording or meaning
+* It does not reorder content
 
-Reflow is a best-effort formatting pass, not a semantic transformation.
+Reflow is a **best-effort formatting pass**, not a semantic transformation.
 
 ---
 
@@ -193,26 +211,27 @@ Optional CJK paragraph reflow
 Consumer tool (OpenCC, search, export, etc.)
 ```
 
-Downstream tools are responsible for encoding conversion, dictionary-based
-transformations, and output formatting.
+Downstream tools are responsible for encoding conversion,
+dictionary-based transformations, and output formatting.
 
 ---
 
 ## Development notes
 
-- Built with the official **Rust stable toolchain**
-- No runtime code generation or extraction
-- No global state or hidden caching
+* Built with the official **Rust stable toolchain**
+* No runtime code generation or extraction
+* No global state or hidden caching
 
 ---
 
 ## Platform support
 
-- Windows (x64)
-- Linux (x64)
-- macOS (Intel / Apple Silicon)
+* Windows (x64)
+* Linux (x64)
+* macOS (Intel / Apple Silicon)
 
-Support depends on the availability of compatible PDFium native libraries.
+Platform support depends on the availability of compatible
+PDFium native libraries.
 
 ---
 
@@ -222,9 +241,13 @@ This project is licensed under the **MIT License**.
 
 ---
 
-## Intended users
+## Intended audience
 
-- CLI tool authors
-- Ebook / novel processing pipelines
-- Developers needing reliable PDF text extraction
-- Projects embedding PDFium without full rendering stacks
+This crate is intended for:
+
+* OpenCC-related tooling
+* CLI tool authors embedding PDFium
+* Ebook / novel processing pipelines
+* Developers studying CJK PDF text extraction and reflow
+
+It is **not** intended as a general-purpose PDF library.

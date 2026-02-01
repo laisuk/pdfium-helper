@@ -371,8 +371,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 [[package]]
 name = "opencc-fmmseg"
 version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5daed7dddf866a729534f7990549bb9d5b14dcab1e6665919ac2b924695a594f"
+source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#444f8bc26245873e266f74bcb43d911f8f6a1739"
 dependencies = [
  "once_cell",
  "rayon",

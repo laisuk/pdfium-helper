@@ -1,9 +1,12 @@
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
+#[cfg(feature = "pdfium-embed")]
 use std::fs;
+#[cfg(feature = "pdfium-embed")]
 use std::io::{self, Write};
 
+#[cfg(feature = "pdfium-embed")]
 fn pdfium_cache_dir(app_name: &str) -> PathBuf {
     #[cfg(target_os = "windows")]
     {
@@ -39,6 +42,7 @@ fn pdfium_cache_dir(app_name: &str) -> PathBuf {
     std::env::temp_dir().join(app_name).join("natives")
 }
 
+#[cfg(feature = "pdfium-embed")]
 fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;

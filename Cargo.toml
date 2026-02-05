@@ -15,11 +15,13 @@ thiserror = "2.0.18"
 anyhow = "1.0.100"
 once_cell = "1.21.3"
 smallvec = "1.15.1"
+zstd = "0.13.3"
 
 [features]
 default = []
 # Turn on integration tests that require an actual pdfium binary present
 integration = []
+pdfium-embed = []
 
 # Default: heavy optimization for libraries (C API performance)
 [profile.release]

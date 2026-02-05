@@ -1,6 +1,73 @@
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
+use std::fs;
+use std::io::{self, Write};
+
+fn pdfium_cache_dir(app_name: &str) -> PathBuf {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            return PathBuf::from(local).join(app_name).join("natives");
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(xdg) = std::env::var("XDG_CACHE_HOME") {
+            return PathBuf::from(xdg).join(app_name).join("natives");
+        }
+        if let Ok(home) = std::env::var("HOME") {
+            return PathBuf::from(home)
+                .join(".cache")
+                .join(app_name)
+                .join("natives");
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            return PathBuf::from(home)
+                .join("Library")
+                .join("Caches")
+                .join(app_name)
+                .join("natives");
+        }
+    }
+
+    std::env::temp_dir().join(app_name).join("natives")
+}
+
+fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // If already exists and size matches, keep it (fast path)
+    if let Ok(meta) = fs::metadata(path) {
+        if meta.len() == bytes.len() as u64 {
+            return Ok(());
+        }
+    }
+
+    let tmp = path.with_extension("tmp");
+    {
+        let mut f = fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.flush()?;
+    }
+
+    // Rename is atomic on most platforms. On Windows, rename fails if the target DLL is loaded.
+    // That’s why we version the filename below (so we don't overwrite a loaded DLL).
+    fs::rename(&tmp, path).or_else(|e| {
+        let _ = fs::remove_file(&tmp);
+        Err(e)
+    })?;
+
+    Ok(())
+}
+
 #[derive(Debug, Error)]
 pub enum PdfiumLoadError {
     #[error("unsupported platform: {0}")]
@@ -17,10 +84,15 @@ pub enum PdfiumLoadError {
 pub fn detect_platform_folder() -> Result<String, PdfiumLoadError> {
     #[cfg(target_os = "windows")]
     {
-        let arch = if cfg!(target_pointer_width = "64") {
-            "x64"
-        } else {
-            "x86"
+        let arch = match std::env::consts::ARCH {
+            "aarch64" => "arm64",
+            _ => {
+                if cfg!(target_pointer_width = "64") {
+                    "x64"
+                } else {
+                    "x86"
+                }
+            }
         };
         return Ok(format!("win-{}", arch));
     }
@@ -99,7 +171,7 @@ pub fn default_library_name() -> &'static str {
 /// - `<platform>` is one of:
 ///   - `win-x64`, `win-x86`
 ///   - `linux-x64`, `linux-arm64`
-///   - `osx-x64`, `osx-arm64`
+///   - `macos-x64`, `macos-arm64`
 /// - `<pdfium library>` is:
 ///   - `pdfium.dll` (Windows)
 ///   - `libpdfium.so` (Linux)
@@ -362,6 +434,12 @@ impl PdfiumLibrary {
             }
         }
 
+        // 5) Embedded Pdfium fallback (optional)
+        #[cfg(feature = "pdfium-embed")]
+        if let Ok(ok) = PdfiumLibrary::load_from_embedded("pdfium-helper") {
+            return Ok(ok);
+        }
+
         // Prefer returning a “likely” expected path (keep your existing behavior)
         let platform = detect_platform_folder()?;
         let expected = PathBuf::from("pdfium")
@@ -370,4 +448,130 @@ impl PdfiumLibrary {
 
         Err(PdfiumLoadError::MissingLibrary(expected))
     }
+
+    #[cfg(feature = "pdfium-embed")]
+    fn embedded_version_tag() -> &'static str {
+        // Put *your* PDFium build version here (or crate version).
+        // Important on Windows: change this when you ship a new DLL so it writes a new filename.
+        "145.0.7616.0"
+    }
+
+    #[cfg(feature = "pdfium-embed")]
+    pub fn load_from_embedded(app_name: &str) -> Result<(Self, PathBuf), PdfiumLoadError> {
+        let platform = detect_platform_folder()?;
+
+        // IMPORTANT: version the filename so we never need to overwrite a loaded DLL on Windows
+        let file_name = format!(
+            "pdfium-{}-{}.{}",
+            Self::embedded_version_tag(),
+            platform,
+            if cfg!(target_os = "windows") {
+                "dll"
+            } else if cfg!(target_os = "linux") {
+                "so"
+            } else {
+                "dylib"
+            }
+        );
+
+        let base = pdfium_cache_dir(app_name);
+        let out = base.join(file_name);
+
+        let compressed: &'static [u8] = PDFIUM_ZSTD;
+        let raw = decompress_native(compressed)?;
+        write_atomic(&out, &raw).map_err(|e| {
+            PdfiumLoadError::LoadFailed(format!("extract embedded pdfium failed: {e}"))
+        })?;
+
+        let lib = unsafe {
+            libloading::Library::new(&out)
+                .map_err(|e| PdfiumLoadError::LoadFailed(e.to_string()))?
+        };
+
+        Ok((Self { lib }, out))
+    }
+}
+
+#[cfg(all(
+    feature = "pdfium-embed",
+    target_os = "windows",
+    target_arch = "x86_64"
+))]
+static PDFIUM_ZSTD: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/pdfium/win-x64/pdfium.dll.zst"
+));
+
+#[cfg(all(feature = "pdfium-embed", target_os = "windows", target_arch = "x86"))]
+static PDFIUM_ZSTD: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/pdfium/win-x86/pdfium.dll.zst"
+));
+
+#[cfg(all(
+    feature = "pdfium-embed",
+    target_os = "windows",
+    target_arch = "aarch64"
+))]
+static PDFIUM_ZSTD: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/pdfium/win-arm64/pdfium.dll.zst"
+));
+
+#[cfg(all(feature = "pdfium-embed", target_os = "linux", target_arch = "x86_64"))]
+static PDFIUM_ZSTD: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/pdfium/linux-x64/libpdfium.so.zst"
+));
+
+#[cfg(all(feature = "pdfium-embed", target_os = "linux", target_arch = "aarch64"))]
+static PDFIUM_ZSTD: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/pdfium/linux-arm64/libpdfium.so.zst"
+));
+
+#[cfg(all(feature = "pdfium-embed", target_os = "macos", target_arch = "x86_64"))]
+static PDFIUM_ZSTD: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/pdfium/macos-x64/libpdfium.dylib.zst"
+));
+
+#[cfg(all(feature = "pdfium-embed", target_os = "macos", target_arch = "aarch64"))]
+static PDFIUM_ZSTD: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/pdfium/macos-arm64/libpdfium.dylib.zst"
+));
+
+#[cfg(all(
+    feature = "pdfium-embed",
+    not(any(
+        all(
+            target_os = "windows",
+            any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64")
+        ),
+        all(
+            target_os = "linux",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ),
+        all(
+            target_os = "macos",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ),
+    ))
+))]
+compile_error!("pdfium-embed enabled but no embedded pdfium binary for this target");
+
+#[cfg(feature = "pdfium-embed")]
+fn decompress_native(zstd_bytes: &[u8]) -> Result<Vec<u8>, PdfiumLoadError> {
+    use std::io::Read;
+
+    let mut decoder = zstd::stream::read::Decoder::new(zstd_bytes)
+        .map_err(|e| PdfiumLoadError::LoadFailed(format!("zstd decoder: {e}")))?;
+
+    let mut out = Vec::new();
+    decoder
+        .read_to_end(&mut out)
+        .map_err(|e| PdfiumLoadError::LoadFailed(format!("zstd decode: {e}")))?;
+
+    Ok(out)
 }

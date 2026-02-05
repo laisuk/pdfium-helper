@@ -66,8 +66,6 @@ Each module has a **single, well-defined responsibility**.
 
 ## Native PDFium loading
 
-Native PDFium libraries are **not bundled** with this crate.
-
 All native discovery and loading logic is implemented in `pdfium_loader.rs`.
 
 ### Supported layouts
@@ -97,7 +95,7 @@ Example:
 pdfium/
   win-x64/pdfium.dll
   linux-x64/libpdfium.so
-  osx-arm64/libpdfium.dylib
+  macos-arm64/libpdfium.dylib
 ```
 
 This layout allows shipping multiple platforms together.
@@ -123,24 +121,73 @@ is returned for logging and diagnostics.
 
 ---
 
-## PDFium binaries
+## Embedded PDFium support (optional)
 
-Prebuilt PDFium native libraries can be obtained from the
+`pdfium-helper` supports an **optional embedded-native mode**, enabled via the
+`pdfium-embed` feature.
+
+When this feature is enabled:
+
+* A **single platform-specific PDFium native library** is embedded into the binary
+* The embedded native is **compressed with zstd** at build time
+* On first use, the library is **decompressed and written once** to a cache directory
+* Subsequent runs load the cached library **without any additional writes**
+
+### Enabling embedded mode
+
+In a downstream crate (for example, `opencc-rs`):
+
+```toml
+pdfium-helper = { path = "../pdfium-helper", features = ["pdfium-embed"] }
+```
+
+Or, if you want to re-export the feature:
+
+```toml
+[features]
+pdfium-embed = ["pdfium-helper/pdfium-embed"]
+```
+
+Build with:
+
+```bash
+cargo build --release --features pdfium-embed
+```
+
+### Runtime behavior
+
+* On first run (or after a PDFium version change), the embedded native is extracted to:
+
+  * Windows: `%LOCALAPPDATA%/pdfium-helper/natives/`
+  * Linux: `$XDG_CACHE_HOME/pdfium-helper/natives/` or `~/.cache/pdfium-helper/natives/`
+  * macOS: `~/Library/Caches/pdfium-helper/natives/`
+* The extracted filename is **versioned** (e.g. `pdfium-145.0.7616.0-win-x64.dll`)
+* Existing cached files with matching size are **not rewritten**
+
+This design avoids DLL locking issues on Windows and keeps startup overhead minimal.
+
+### Trade-offs
+
+* Embedded mode performs **one write on first use** per version
+* Dynamic (non-embedded) mode performs **no writes** and loads the native directly
+
+Users may choose the mode that best fits their deployment model.
+
+---
+
+## PDFium binaries (dynamic mode)
+
+If not using embedded mode, prebuilt PDFium native libraries can be obtained from the
 **pdfium-binaries** project:
 
 > [https://github.com/bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries)
 
-This repository provides ready-to-use PDFium binaries for common platforms
-(Windows, Linux, macOS).
-
 You may supply either:
 
-* A **single native library** (`pdfium.dll`, `libpdfium.so`, `libpdfium.dylib`)
-  placed next to the executable, or
+* A **single native library** placed next to the executable, or
 * A bundled `pdfium/` directory containing multiple platforms
 
-`pdfium-helper` (and OpenCC tooling using it) will automatically detect
-and load the correct library at runtime.
+`pdfium-helper` will automatically detect and load the correct library at runtime.
 
 ---
 
@@ -219,15 +266,16 @@ dictionary-based transformations, and output formatting.
 ## Development notes
 
 * Built with the official **Rust stable toolchain**
-* No runtime code generation or extraction
-* No global state or hidden caching
+* No runtime code generation
+* Embedded mode performs controlled, one-time extraction only
+* No global mutable state
 
 ---
 
 ## Platform support
 
-* Windows (x64)
-* Linux (x64)
+* Windows (x64 / x86 / arm64)
+* Linux (x64 / arm64)
 * macOS (Intel / Apple Silicon)
 
 Platform support depends on the availability of compatible

@@ -4,10 +4,10 @@ version = "0.8.5"
 edition = "2021"
 
 [dependencies]
-clap = "4.5.56"
+clap = "4.5.57"
 encoding_rs = "0.8.35"
 encoding_rs_io = "0.1.7"
-regex = "1.12.2"
+regex = "1.12.3"
 # Keep zip MSRV-safe for 1.75 (3.x, not 4.x):
 zip = { version = "=3.0.0", default-features = false, features = ["deflate"] }
 #zip = "=3.0.0"
@@ -17,9 +17,9 @@ zip = { version = "=3.0.0", default-features = false, features = ["deflate"] }
 #time-core = "=0.1.4"
 tempfile = "3.24.0"
 walkdir = "2.5.0"
-opencc-fmmseg = { git = "https://github.com/laisuk/opencc-fmmseg.git", branch = "master" }
-#opencc-fmmseg = "0.8.5"
-pdfium-helper = {path="../.."}
+#opencc-fmmseg = { git = "https://github.com/laisuk/opencc-fmmseg.git", branch = "master" }
+opencc-fmmseg = "0.8.5"
+pdfium-helper = {path="../..", features = ["pdfium-embed"]}
 
 [build-dependencies]
 winres = "0.1.12"

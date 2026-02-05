@@ -1,3 +1,7 @@
+param(
+    [switch]$Overwrite
+)
+
 # Compress all pdfium native binaries to .zst
 # Run from repository root
 # Requires: zstd.exe in PATH
@@ -23,8 +27,8 @@ foreach ($pattern in $patterns) {
         $src = $_.FullName
         $dst = "$src.zst"
 
-        if (Test-Path $dst) {
-            Write-Host "[SKIP] $dst already exists"
+        if ((Test-Path $dst) -and (-not $Overwrite)) {
+            Write-Host "[SKIP] $dst already exists (use -Overwrite to force)"
             return
         }
 

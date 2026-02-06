@@ -1,3 +1,4 @@
+:: scripts/build-nightly-win7-x64.cmd
 @echo off
 setlocal
 
@@ -8,12 +9,21 @@ REM ----------------------------------------
 REM Force Win7 subsystem baseline (6.01)
 set RUSTFLAGS=-C link-arg=/SUBSYSTEM:CONSOLE,6.01
 
+REM Feature flag (optional)
+set FEATURES=
+
+if not "%~1"=="" (
+    set FEATURES=--features pdfium-embed
+)
+
 REM Optional: sanity echo (helps logs / CI)
 echo RUSTFLAGS=%RUSTFLAGS%
+if not "%FEATURES%"=="" echo FEATURES=%FEATURES%
 echo.
 
 cargo +nightly build -r --workspace ^
   -Z build-std=std,panic_abort ^
-  --target x86_64-win7-windows-msvc
+  --target x86_64-win7-windows-msvc ^
+  %FEATURES%
 
 endlocal

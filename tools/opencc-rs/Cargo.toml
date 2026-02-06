@@ -22,7 +22,8 @@ tempfile = "3.24.0"
 walkdir = "2.5.0"
 #opencc-fmmseg = { git = "https://github.com/laisuk/opencc-fmmseg.git", branch = "master" }
 opencc-fmmseg = "0.8.5"
-pdfium-helper = {path="../..", features = ["pdfium-embed"]}
+#pdfium-helper = {path="../..", features = ["pdfium-embed"]}
+pdfium-helper = {path="../.."}
 
 [build-dependencies]
 winres = "0.1.12"

@@ -82,7 +82,7 @@ fn main() {
 
         // Set rich metadata fields
         res.set("FileDescription", &desc);
-        res.set("ProductName", &name);
+        res.set("ProductName", "Opencc-Fmmseg CLI Tool");
         res.set("CompanyName", &authors);
         res.set("LegalCopyright", "© Laisuk. MIT License");
         res.set("OriginalFilename", "opencc-rs.exe");

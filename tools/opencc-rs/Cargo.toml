@@ -3,6 +3,9 @@ name = "opencc-rs"
 version = "0.8.5"
 edition = "2021"
 
+[package.metadata.capi]
+revision = 0
+
 [dependencies]
 clap = "4.5.57"
 encoding_rs = "0.8.35"
@@ -23,3 +26,4 @@ pdfium-helper = {path="../..", features = ["pdfium-embed"]}
 
 [build-dependencies]
 winres = "0.1.12"
+toml = "=0.5.11"

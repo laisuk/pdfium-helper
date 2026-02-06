@@ -394,6 +394,7 @@ dependencies = [
  "pdfium-helper",
  "regex",
  "tempfile",
+ "toml",
  "walkdir",
  "winres",
  "zip",

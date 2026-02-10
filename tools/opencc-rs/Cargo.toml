@@ -1,6 +1,6 @@
 [package]
 name = "opencc-rs"
-version = "0.8.5"
+version = "0.9.0"
 edition = "2021"
 
 [package.metadata.capi]
@@ -25,4 +25,4 @@ pdfium-helper = {path="../.."}
 
 [build-dependencies]
 winres = "0.1.12"
-toml = "=0.5.11"
+toml = "=0.8.23"

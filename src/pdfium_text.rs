@@ -104,7 +104,7 @@ impl PdfiumLastError {
     pub fn hint(self) -> &'static str {
         match self {
             Self::File =>
-                "Check the file path and permissions. Network drives (e.g. R:\\) may fail; try copying the PDF to a local disk.",
+                "Check the file path and permissions. Network drives may fail; try copying the PDF to a local disk.",
             Self::Password =>
                 "Decrypt the PDF first or provide a password (if supported).",
             Self::Format =>

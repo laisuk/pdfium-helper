@@ -32,10 +32,13 @@ pub fn print_progress(page: i32, total: i32, text: &str) {
         text.chars().count()
     );
 
+    // Simple fixed width (avoid wrap)
+    const WIDTH: usize = 70; // safe for 72-column console
+
     // pad to fully overwrite previous line
     let mut line = msg;
-    if line.len() < 80 {
-        line.push_str(&" ".repeat(80 - line.len()));
+    if line.len() < WIDTH {
+        line.push_str(&" ".repeat(WIDTH - line.len()));
     }
 
     print!("\r{}", line);

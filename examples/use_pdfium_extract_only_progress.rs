@@ -21,7 +21,7 @@ fn main() -> anyhow::Result<()> {
 
     let mut pages: Vec<String> = Vec::new();
 
-    extract_pdf_pages_with_callback_pdfium(&pdfium, input_file, |page, total, text| {
+    extract_pdf_pages_with_callback_pdfium(&pdfium, input_file, false, |page, total, text| {
         // let percent = page * 100 / total.max(1);
         //
         // let msg = format!(

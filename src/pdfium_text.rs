@@ -231,6 +231,7 @@ static PDFIUM_INIT_ONCE: OnceLock<()> = OnceLock::new();
 pub fn extract_pdf_pages_with_callback_pdfium<F>(
     lib: &PdfiumLibrary,
     path: &str,
+    add_page_header: bool, // ✅ new
     mut callback: F,
 ) -> Result<(), PdfiumExtractError>
 where
@@ -274,21 +275,24 @@ where
 
     let total = (fns.get_page_count)(doc);
     if total <= 0 {
+        // keep behavior consistent
         callback(1, 1, "\n");
         return Ok(());
     }
 
     for i in 0..total {
+        let page_no = i + 1;
+
         let page = (fns.load_page)(doc, i);
         if page.is_null() {
-            callback(i + 1, total, "\n");
+            callback(page_no, total, "\n");
             continue;
         }
 
         let text_page = (fns.text_load_page)(page);
         if text_page.is_null() {
             (fns.close_page)(page);
-            callback(i + 1, total, "\n");
+            callback(page_no, total, "\n");
             continue;
         }
 
@@ -306,7 +310,15 @@ where
         (fns.close_page)(page);
 
         let out = normalize_page_text(raw);
-        callback(i + 1, total, &out);
+
+        if add_page_header {
+            // ✅ match C# format exactly
+            let header = format!("=== [Page {page_no}/{total}] ===\n");
+            let with_header = header + &out;
+            callback(page_no, total, &with_header);
+        } else {
+            callback(page_no, total, &out);
+        }
     }
 
     Ok(())
@@ -316,8 +328,9 @@ where
 pub fn extract_pdf_text_pdfium(
     lib: &PdfiumLibrary,
     path: &str,
+    add_page_header: bool,
 ) -> Result<String, PdfiumExtractError> {
     let mut out = String::new();
-    extract_pdf_pages_with_callback_pdfium(lib, path, |_, _, s| out.push_str(s))?;
+    extract_pdf_pages_with_callback_pdfium(lib, path, add_page_header, |_, _, s| out.push_str(s))?;
     Ok(out)
 }

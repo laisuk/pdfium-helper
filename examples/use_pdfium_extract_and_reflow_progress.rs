@@ -20,7 +20,7 @@ fn main() -> anyhow::Result<()> {
     let mut pages: Vec<String> = Vec::new();
 
         // Page-by-page extraction with progress
-    extract_pdf_pages_with_callback_pdfium(&pdfium, input_file, |page, total, text| {
+    extract_pdf_pages_with_callback_pdfium(&pdfium, input_file, false,|page, total, text| {
         pdfium_helper::print_progress(page, total, text);
         pages.push(text.to_owned());
     })?;

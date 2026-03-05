@@ -377,6 +377,7 @@ dependencies = [
  "anyhow",
  "libloading",
  "once_cell",
+ "regex",
  "smallvec",
  "thiserror",
  "zstd",

@@ -6,21 +6,90 @@
 
 use crate::cjk_text::*;
 use crate::punct_sets::*;
+use regex::Regex;
 
 /// Reflow CJK paragraphs from PDF-extracted text.
 ///
-/// Mirrors the behavior of the original `reflow_cjk_paragraphs()` PyO3 function.
-/// - Normalizes CRLF/CR to LF
-/// - Merges artificial line breaks
-/// - Preserves headings / metadata / page markers / dialog structure
+/// This function reconstructs natural paragraphs from line-wrapped
+/// text commonly produced by PDF extraction tools.
 ///
-/// `add_pdf_page_header`:
-/// - If false, skips page-break-like blank lines not preceded by CJK punctuation.
+/// Behavior:
+/// - Normalizes line endings (`CRLF` / `CR` → `LF`)
+/// - Merges artificial line breaks caused by PDF layout
+/// - Preserves logical structure such as:
+///   - headings
+///   - metadata lines
+///   - page markers
+///   - dialog / quotation structure
+/// - Avoids merging across structural boundaries
 ///
-/// `compact`:
-/// - If true, join paragraphs with "\n"
-/// - If false, join paragraphs with "\n\n"
+/// # Parameters
+///
+/// `text`
+///
+/// Source text, typically obtained from PDF extraction.
+///
+/// `add_pdf_page_header`
+///
+/// Controls handling of blank lines that may represent page boundaries.
+///
+/// - `false`
+///   Soft blank lines that are likely page-break artifacts will be ignored
+///   unless the preceding paragraph ends with strong CJK punctuation.
+///
+/// - `true`
+///   Blank lines are preserved as paragraph boundaries.
+///
+/// `compact`
+///
+/// Controls paragraph spacing in the output.
+///
+/// - `true`  → paragraphs joined with `"\n"`
+/// - `false` → paragraphs joined with `"\n\n"`
+///
+/// # Notes
+///
+/// This is the **stable public API** used by Python bindings and other
+/// high-level integrations.
+///
+/// For advanced use cases (such as custom heading detection), see
+/// [`reflow_cjk_paragraphs_with_heading_regex`].
 pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: bool) -> String {
+    reflow_cjk_paragraphs_with_heading_regex(text, add_pdf_page_header, compact, None)
+}
+
+/// Advanced paragraph reflow with optional custom heading detection.
+///
+/// This function behaves the same as [`reflow_cjk_paragraphs`], but allows
+/// callers to supply a pre-compiled regular expression used to detect
+/// additional heading lines.
+///
+/// The custom regex **augments the built-in heading detection rules**.
+/// If the regex matches a line, that line will be treated as a standalone
+/// heading and will force a paragraph boundary.
+///
+/// The regex is evaluated against the logical heading probe, which has
+/// leading indentation removed.
+///
+/// # Parameters
+///
+/// `heading_re`
+///
+/// Optional compiled regular expression used to detect headings.
+///
+/// If `None`, only the built-in heading heuristics are used.
+///
+/// # Performance
+///
+/// Passing a pre-compiled [`Regex`] avoids recompiling the pattern during
+/// paragraph processing and is recommended for batch processing or GUI
+/// applications.
+pub fn reflow_cjk_paragraphs_with_heading_regex(
+    text: &str,
+    add_pdf_page_header: bool,
+    compact: bool,
+    heading_re: Option<&Regex>,
+) -> String {
     // If the whole text is whitespace, return as-is.
     if text.chars().all(|c| c.is_whitespace()) {
         return text.to_owned();
@@ -107,7 +176,15 @@ pub fn reflow_cjk_paragraphs(text: &str, add_pdf_page_header: bool, compact: boo
         }
 
         // 6) Heading / metadata detection
-        let is_title_heading = is_title_heading_line(heading_probe);
+        let mut is_title_heading = is_title_heading_line(heading_probe);
+        // NEW: override / OR with custom regex if provided
+        if let Some(re) = heading_re {
+            // Use heading_probe to avoid indent noise
+            if re.is_match(heading_probe) {
+                is_title_heading = true;
+            }
+        }
+
         let is_short_heading = is_heading_like(&line_text);
         let is_metadata = is_metadata_line(&line_text);
 

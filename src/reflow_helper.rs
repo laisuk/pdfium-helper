@@ -107,6 +107,9 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
     let mut buffer = String::new();
     let mut dialog_state = DialogState::new();
 
+    let custom_re = heading_re;
+    let is_custom_heading_regex = custom_re.is_some();
+
     for raw_line in lines {
         // 1) Visual form: trim right-side whitespace, then remove halfwidth indent
         let trimmed_end = raw_line.trim_end();
@@ -178,9 +181,8 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
         // 6) Heading / metadata detection
         let mut is_title_heading = is_title_heading_line(heading_probe);
         // NEW: override / OR with custom regex if provided
-        if let Some(re) = heading_re {
-            // Use heading_probe to avoid indent noise
-            if re.is_match(heading_probe) {
+        if is_custom_heading_regex {
+            if custom_re.unwrap().is_match(heading_probe) {
                 is_title_heading = true;
             }
         }

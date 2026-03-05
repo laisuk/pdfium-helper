@@ -13,6 +13,7 @@ pub use pdfium_text::{
     print_error,
 };
 pub use reflow_helper::reflow_cjk_paragraphs;
+pub use reflow_helper::reflow_cjk_paragraphs_with_heading_regex;
 // use punct_sets::*;
 // use cjk_text::*;
 pub use utils::*;

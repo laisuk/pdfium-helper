@@ -245,7 +245,21 @@ impl PdfiumLibrary {
     ///
     /// e.g. `opencc-rs.exe` and `pdfium.dll` in the same folder.
     fn load_from_dir_single_lib(dir: &Path) -> Result<(Self, PathBuf), PdfiumLoadError> {
-        let lib_path = dir.join(default_library_name());
+        let lib_path = if dir.is_file() {
+            // User passed full path — verify filename
+            let name = dir.file_name().and_then(|s| s.to_str()).unwrap_or("");
+
+            if name != default_library_name() {
+                return Err(PdfiumLoadError::LoadFailed(format!(
+                    "Invalid pdfium library name: {name}"
+                )));
+            }
+
+            dir.to_path_buf()
+        } else {
+            // User passed directory
+            dir.join(default_library_name())
+        };
 
         if !lib_path.exists() {
             return Err(PdfiumLoadError::MissingLibrary(lib_path));
@@ -257,6 +271,19 @@ impl PdfiumLibrary {
         };
 
         Ok((Self { lib }, lib_path))
+    }
+
+    pub fn load_from_base_dir_flexible(
+        base_dir: &Path,
+    ) -> Result<(Self, PathBuf), PdfiumLoadError> {
+        // Accept either:
+        // 1) <base_dir>/<library>
+        // 2) <base_dir>/pdfium/<platform>/<library>
+        if let Ok(ok) = Self::load_from_dir_single_lib(base_dir) {
+            return Ok(ok);
+        }
+
+        Self::load_from_bundled_dir(base_dir)
     }
 
     pub fn load_from_exe_dir() -> Result<(PdfiumLibrary, PathBuf), PdfiumLoadError> {

@@ -100,6 +100,12 @@ fn main() {
                         .action(clap::ArgAction::SetTrue)
                         .help("Extract text from PDF document only (default: false)"),
                 )
+                .arg(
+                    Arg::new("pdfium")
+                        .long("pdfium")
+                        .value_name("dir")
+                        .help("Custom Pdfium native base dir; falls back to default bundled lookup if invalid"),
+                )
                 // 👇 KEY LINE
                 .arg_required_else_help(false)
                 .mut_arg("config", |a| a.required_unless_present("extract")),
@@ -315,6 +321,7 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let compact = matches.get_flag("compact");
     let header = matches.get_flag("header");
     let extract_only = matches.get_flag("extract");
+    let pdfium_dir = matches.get_one::<String>("pdfium");
     let config = if extract_only {
         None
     } else {
@@ -362,9 +369,34 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         println!("Extracting PDF page-by-page with PDFium: {input_norm}");
     }
 
-    // Load Pdfium native (dev + release friendly)
-    let (pdfium, lib_path) = PdfiumLibrary::load_with_fallbacks()?;
-    println!("Loaded pdfium: {}", lib_path.display());
+    // Load Pdfium native:
+    // 1) try custom --pdfium dir first
+    // 2) if invalid / load fails, warn and fall back to default lookup
+    let pdfium = if let Some(dir) = pdfium_dir {
+        let base = std::path::Path::new(dir);
+
+        match PdfiumLibrary::load_from_base_dir_flexible(base) {
+            Ok((pdfium, lib_path)) => {
+                print_loaded_pdfium(&lib_path);
+                pdfium
+            }
+            Err(e) => {
+                eprintln!(
+                    "Warning: failed to load Pdfium from {}: {}",
+                    base.display(),
+                    e
+                );
+
+                let (pdfium, lib_path) = PdfiumLibrary::load_with_fallbacks()?;
+                print_loaded_pdfium(&lib_path);
+                pdfium
+            }
+        }
+    } else {
+        let (pdfium, lib_path) = PdfiumLibrary::load_with_fallbacks()?;
+        print_loaded_pdfium(&lib_path);
+        pdfium
+    };
 
     let mut pages: Vec<String> = Vec::new();
 
@@ -422,6 +454,13 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         final_output.display()
     );
     Ok(())
+}
+
+fn print_loaded_pdfium(path: &std::path::Path) {
+    println!(
+        "Loaded pdfium: {}",
+        path.display().to_string().replace('\\', "/")
+    );
 }
 
 /// Write UTF-8 text using Unix newlines (`\n`) on all platforms

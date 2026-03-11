@@ -158,9 +158,9 @@ cargo build --release --features pdfium-embed
 
 * On first run (or after a PDFium version change), the embedded native is extracted to:
 
-  * Windows: `%LOCALAPPDATA%/pdfium-helper/natives/`
-  * Linux: `$XDG_CACHE_HOME/pdfium-helper/natives/` or `~/.cache/pdfium-helper/natives/`
-  * macOS: `~/Library/Caches/pdfium-helper/natives/`
+    * Windows: `%LOCALAPPDATA%/pdfium-helper/natives/`
+    * Linux: `$XDG_CACHE_HOME/pdfium-helper/natives/` or `~/.cache/pdfium-helper/natives/`
+    * macOS: `~/Library/Caches/pdfium-helper/natives/`
 * The extracted filename is **versioned** (e.g. `pdfium-145.0.7616.0-win-x64.dll`)
 * Existing cached files with matching size are **not rewritten**
 
@@ -172,6 +172,25 @@ This design avoids DLL locking issues on Windows and keeps startup overhead mini
 * Dynamic (non-embedded) mode performs **no writes** and loads the native directly
 
 Users may choose the mode that best fits their deployment model.
+
+### Note on cross-compilation
+
+The `pdfium-embed` feature embeds a **prebuilt Pdfium native library for the current target OS and architecture** using
+`#[cfg(target_os, target_arch)]`.
+
+This feature is primarily intended for **native builds**, where the build machine architecture matches the target
+architecture (for example, building on macOS ARM64 for macOS ARM64).
+
+When **cross-compiling**, it is recommended to **disable `pdfium-embed`** and provide Pdfium externally instead. In such
+cases, `pdfium-helper` will load Pdfium dynamically using its fallback mechanisms, including:
+
+- `PDFIUM_LIB_DIR` environment variable
+- A native library placed next to the executable
+- A bundled `pdfium/<platform>/` directory layout
+- Development fallbacks such as the current working directory
+
+Using external Pdfium in cross-compilation scenarios avoids architecture mismatches and ensures the correct native
+library is loaded at runtime.
 
 ---
 

@@ -4,13 +4,13 @@ version = "0.9.0"
 edition = "2021"
 
 [package.metadata.capi]
-revision = 0
+revision = 1
 
 [dependencies]
-clap = "4.5.60"
-encoding_rs = "0.8.35"
-encoding_rs_io = "0.1.7"
-regex = "1.12.3"
+clap = "=4.5"
+encoding_rs = "0.8"
+encoding_rs_io = "0.1"
+regex = "1.12"
 # Keep zip MSRV-safe for 1.75 (3.x, not 4.x):
 zip = { version = "=3.0.0", default-features = false, features = ["deflate"] }
 #zip = "=3.0.0"
@@ -19,7 +19,7 @@ zip = { version = "=3.0.0", default-features = false, features = ["deflate"] }
 #time = "=0.3.41"
 #time-core = "=0.1.4"
 #opencc-fmmseg = { git = "https://github.com/laisuk/opencc-fmmseg.git", branch = "master" }
-opencc-fmmseg = "0.9.0"
+opencc-fmmseg = "0.9"
 #pdfium-helper = {path="../..", features = ["pdfium-embed"]}
 pdfium-helper = {path="../.."}
 

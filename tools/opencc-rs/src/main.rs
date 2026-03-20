@@ -1,10 +1,11 @@
 mod office_converter;
 use office_converter::OfficeConverter;
 
+use clap::builder::{StringValueParser, TypedValueParser, ValueParser};
 use clap::{Arg, ArgMatches, Command};
 use encoding_rs::Encoding;
 use encoding_rs_io::DecodeReaderBytesBuilder;
-use opencc_fmmseg::OpenCC;
+use opencc_fmmseg::{OpenCC, OpenccConfig};
 use pdfium_helper::{
     extract_pdf_pages_with_callback_pdfium, reflow_cjk_paragraphs, PdfiumExtractError,
     PdfiumLibrary,
@@ -12,11 +13,7 @@ use pdfium_helper::{
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, IsTerminal, Read, Write};
-
-const CONFIG_LIST: [&str; 16] = [
-    "s2t", "t2s", "s2tw", "tw2s", "s2twp", "tw2sp", "s2hk", "hk2s", "t2tw", "t2twp", "t2hk",
-    "tw2t", "tw2tp", "hk2t", "t2jp", "jp2t",
-];
+use std::sync::OnceLock;
 
 fn main() {
     let matches = Command::new("opencc-rs")
@@ -129,6 +126,28 @@ fn main() {
     }
 }
 
+fn get_supported_configs() -> &'static str {
+    static SUPPORTED: OnceLock<String> = OnceLock::new();
+    SUPPORTED.get_or_init(|| {
+        let mut s = String::with_capacity(128);
+        for (i, cfg) in OpenccConfig::ALL.iter().enumerate() {
+            if i > 0 {
+                s.push_str(" | ");
+            }
+            s.push_str(cfg.as_str());
+        }
+        s
+    })
+}
+
+fn config_value_parser() -> ValueParser {
+    ValueParser::new(StringValueParser::new().try_map(|s| {
+        OpenccConfig::try_from(s.as_str())
+            .map(OpenccConfig::as_str)
+            .map(str::to_owned)
+            .map_err(|_| format!("\nSupported configs: {}", get_supported_configs()))
+    }))
+}
 fn common_args() -> Vec<Arg> {
     vec![
         Arg::new("input")
@@ -145,8 +164,11 @@ fn common_args() -> Vec<Arg> {
             .short('c')
             .long("config")
             // .required(true)
-            .value_parser(CONFIG_LIST)
-            .help("Conversion configuration"),
+            .value_parser(config_value_parser())
+            .help(format!(
+                "Conversion configuration ({})",
+                get_supported_configs()
+            )),
         Arg::new("punct")
             .short('p')
             .long("punct")

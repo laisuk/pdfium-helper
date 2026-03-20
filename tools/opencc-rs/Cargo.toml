@@ -1,6 +1,6 @@
 [package]
 name = "opencc-rs"
-version = "0.9.0"
+version = "0.9.1"
 edition = "2021"
 
 [package.metadata.capi]
@@ -19,10 +19,10 @@ zip = { version = "=3.0.0", default-features = false, features = ["deflate"] }
 #time = "=0.3.41"
 #time-core = "=0.1.4"
 #opencc-fmmseg = { git = "https://github.com/laisuk/opencc-fmmseg.git", branch = "master" }
-opencc-fmmseg = "0.9"
+opencc-fmmseg = "0.9.1"
 #pdfium-helper = {path="../..", features = ["pdfium-embed"]}
 pdfium-helper = {path="../.."}
 
 [build-dependencies]
-winres = "0.1.12"
-toml = "=0.8.23"
+winres = "0.1"
+toml = "=0.8"

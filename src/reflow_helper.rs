@@ -859,3 +859,15 @@ impl DialogState {
             || self.corner_wide > 0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::collapse_repeated_segments;
+
+    #[test]
+    fn collapse_repeated_phrase_real_case_keeps_single_copy() {
+        let input = "第十三章 背负着一切的麒麟 背负着一切的麒麟 背负着一切的麒麟 背负着一切的麒麟";
+        let expected = "第十三章 背负着一切的麒麟";
+        assert_eq!(collapse_repeated_segments(input), expected);
+    }
+}

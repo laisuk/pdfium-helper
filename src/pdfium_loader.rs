@@ -210,7 +210,8 @@ impl PdfiumLibrary {
     ///
     /// The first successful load is cached for the lifetime of the process. If the
     /// first load attempt fails, the same error is returned on subsequent calls.
-    pub fn global_with_fallbacks() -> Result<(&'static PdfiumLibrary, &'static Path), PdfiumLoadError> {
+    pub fn global_with_fallbacks(
+    ) -> Result<(&'static PdfiumLibrary, &'static Path), PdfiumLoadError> {
         match GLOBAL_PDFIUM_LIBRARY.get_or_init(|| {
             Self::load_with_fallbacks().map(|(library, path)| GlobalPdfiumLibrary { library, path })
         }) {

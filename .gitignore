@@ -1,1 +1,27 @@
 /target
+
+# JetBrains IDEs
+.idea/
+*.iml
+out/
+
+# VS Code
+.vscode/
+
+# Rust/Cargo local artifacts
+Cargo.lock.user
+cargo-timing*.html
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+Desktop.ini

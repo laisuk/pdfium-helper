@@ -212,17 +212,17 @@ fn decode_pdfium_u16(buf: &[u16], extracted: i32) -> String {
 }
 
 /// Matches `_normalize_page_text()` behavior. :contentReference[oaicite:8]{index=8}
-fn normalize_page_text(mut s: String) -> String {
-    if !s.is_empty() {
-        s = s.replace("\r\n", "\n").replace('\r', "\n");
-    }
-
+fn normalize_page_text(s: String) -> String {
     if s.trim().is_empty() {
         return "\n".to_string();
     }
 
-    let trimmed = s.trim().to_string();
-    format!("{trimmed}\n\n")
+    let trimmed = s.trim_end();
+    let mut out = String::with_capacity(trimmed.len() + 2);
+    out.push_str(trimmed);
+    out.push('\n');
+    out.push('\n');
+    out
 }
 
 static PDFIUM_INIT_ONCE: OnceLock<()> = OnceLock::new();
@@ -334,3 +334,26 @@ pub fn extract_pdf_text_pdfium(
     extract_pdf_pages_with_callback_pdfium(lib, path, add_page_header, |_, _, s| out.push_str(s))?;
     Ok(out)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_page_text;
+
+    #[test]
+    fn normalize_page_text_preserves_leading_indentation() {
+        let input = "\u{3000}\u{3000}Indented first line\nSecond line\n".to_string();
+        let out = normalize_page_text(input);
+        assert_eq!(out, "\u{3000}\u{3000}Indented first line\nSecond line\n\n");
+    }
+
+    #[test]
+    fn normalize_page_text_keeps_blank_page_marker() {
+        let out = normalize_page_text("   \n\n\t".to_string());
+        assert_eq!(out, "\n");
+    }
+}
+
+
+
+
+

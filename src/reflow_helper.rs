@@ -451,7 +451,7 @@ fn is_metadata_line(line: &str) -> bool {
     };
 
     let key = s[..sep_byte_idx].trim();
-    if !METADATA_KEYS.contains(key) {
+    if !metadata_keys().contains(key) {
         return false;
     }
 

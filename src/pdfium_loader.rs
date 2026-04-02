@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use thiserror::Error;
 
 #[cfg(feature = "pdfium-embed")]
@@ -71,7 +72,7 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 pub enum PdfiumLoadError {
     #[error("unsupported platform: {0}")]
     UnsupportedPlatform(String),
@@ -193,7 +194,31 @@ pub struct PdfiumLibrary {
     lib: libloading::Library,
 }
 
+struct GlobalPdfiumLibrary {
+    library: PdfiumLibrary,
+    path: PathBuf,
+}
+
+static GLOBAL_PDFIUM_LIBRARY: OnceLock<Result<GlobalPdfiumLibrary, PdfiumLoadError>> =
+    OnceLock::new();
+
 impl PdfiumLibrary {
+    /// Loads Pdfium once per process and returns a shared handle plus the resolved path.
+    ///
+    /// This is recommended for long-lived applications such as GUI backends,
+    /// where repeated native load/unload cycles may be undesirable.
+    ///
+    /// The first successful load is cached for the lifetime of the process. If the
+    /// first load attempt fails, the same error is returned on subsequent calls.
+    pub fn global_with_fallbacks() -> Result<(&'static PdfiumLibrary, &'static Path), PdfiumLoadError> {
+        match GLOBAL_PDFIUM_LIBRARY.get_or_init(|| {
+            Self::load_with_fallbacks().map(|(library, path)| GlobalPdfiumLibrary { library, path })
+        }) {
+            Ok(global) => Ok((&global.library, global.path.as_path())),
+            Err(err) => Err(err.clone()),
+        }
+    }
+
     /// Loads Pdfium from a **bundled directory layout**.
     ///
     /// This function looks for Pdfium under:
@@ -313,6 +338,22 @@ impl PdfiumLibrary {
                 .map_err(|e| PdfiumLoadError::LoadFailed(format!("{e}")))?
         };
         Ok(Self { lib })
+    }
+
+    #[cfg(feature = "pdfium-embed")]
+    fn try_load_cached_embedded(path: &Path) -> Result<Option<Self>, PdfiumLoadError> {
+        if !path.exists() {
+            return Ok(None);
+        }
+
+        let lib = unsafe {
+            match libloading::Library::new(path) {
+                Ok(lib) => lib,
+                Err(_) => return Ok(None),
+            }
+        };
+
+        Ok(Some(Self { lib }))
     }
 
     /// Resolves a raw symbol from the loaded Pdfium library.
@@ -506,6 +547,10 @@ impl PdfiumLibrary {
 
         let base = pdfium_cache_dir(app_name);
         let out = base.join(file_name);
+
+        if let Some(lib) = Self::try_load_cached_embedded(&out)? {
+            return Ok((lib, out));
+        }
 
         let compressed: &'static [u8] = PDFIUM_ZSTD;
         let raw = decompress_native(compressed)?;

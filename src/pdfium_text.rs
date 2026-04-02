@@ -1,7 +1,8 @@
 #![allow(non_camel_case_types)]
 
 use crate::pdfium_loader::{PdfiumLibrary, PdfiumLoadError};
-use std::sync::OnceLock;
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 
 type FPDF_DOCUMENT = *mut core::ffi::c_void;
 type FPDF_PAGE = *mut core::ffi::c_void;
@@ -147,9 +148,19 @@ struct PdfiumFns {
     get_last_error: FPDF_GetLastError, // ✅ NEW
 }
 
-impl PdfiumFns {
-    unsafe fn resolve(lib: &PdfiumLibrary) -> Result<Self, PdfiumLoadError> {
-        Ok(Self {
+fn resolved_fns(lib: &PdfiumLibrary) -> Result<PdfiumFns, PdfiumLoadError> {
+    static PDFIUM_FNS_CACHE: OnceLock<Mutex<HashMap<usize, PdfiumFns>>> = OnceLock::new();
+
+    let key = lib as *const PdfiumLibrary as usize;
+    let cache = PDFIUM_FNS_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut guard = cache.lock().expect("pdfium function cache poisoned");
+
+    if let Some(fns) = guard.get(&key).copied() {
+        return Ok(fns);
+    }
+
+    let fns = unsafe {
+        PdfiumFns {
             init: lib.get(b"FPDF_InitLibrary\0")?,
             destroy: lib.get(b"FPDF_DestroyLibrary\0")?,
             load_document: lib.get(b"FPDF_LoadDocument\0")?,
@@ -161,9 +172,11 @@ impl PdfiumFns {
             text_close_page: lib.get(b"FPDFText_ClosePage\0")?,
             text_count_chars: lib.get(b"FPDFText_CountChars\0")?,
             text_get_text: lib.get(b"FPDFText_GetText\0")?,
-            get_last_error: lib.get(b"FPDF_GetLastError\0")?, // ✅
-        })
-    }
+            get_last_error: lib.get(b"FPDF_GetLastError\0")?,
+        }
+    };
+    guard.insert(key, fns);
+    Ok(fns)
 }
 
 /// Compress multiple '\n' to max 2 (matches Python `_compress_newlines`). :contentReference[oaicite:6]{index=6}
@@ -237,7 +250,7 @@ pub fn extract_pdf_pages_with_callback_pdfium<F>(
 where
     F: FnMut(i32, i32, &str),
 {
-    let fns = unsafe { PdfiumFns::resolve(lib)? };
+    let fns = resolved_fns(lib)?;
 
     // init once per process (safer than calling init/destroy per call if you multi-call in CLI).
     PDFIUM_INIT_ONCE.get_or_init(|| (fns.init)());

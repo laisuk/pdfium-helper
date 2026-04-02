@@ -320,7 +320,7 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
         // Tolerance for imperfect source text:
         // - normal case: buffer has no bracket issue
         // - local corruption: current line itself has bracket issue (OCR / typo / page split)
-        // - fallback: if the buffer is already long enough (> 60), allow flush at this
+        // - fallback: if the buffer is already long enough (> 120), allow flush at this
         //   strong dialog boundary to stop runaway accumulation caused by missing opening
         //   quotes or cross-page broken quoted text
         if let Some((last_ch, prev_ch)) = last_two_non_whitespace(stripped) {
@@ -338,7 +338,7 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
 
                 if !dialog_state.is_unclosed()
                     && punct_before_closer_is_strong
-                    && (!buffer_has_bracket_issue || line_has_bracket_issue || buffer.len() > 60)
+                    && (!buffer_has_bracket_issue || line_has_bracket_issue || buffer.len() > 120)
                 {
                     segments.push(std::mem::take(&mut buffer));
                     dialog_state.reset();
@@ -698,10 +698,25 @@ fn collapse_repeated_segments(line: &str) -> String {
         return line.to_owned();
     }
 
+    if parts.len() == 1 {
+        let token = parts[0];
+        return if likely_needs_token_collapse(token) {
+            collapse_repeated_token(token)
+        } else {
+            token.to_owned()
+        };
+    }
+
     let phrase_collapsed = collapse_repeated_word_sequences(&parts);
     let token_collapsed: Vec<String> = phrase_collapsed
         .into_iter()
-        .map(|tok| collapse_repeated_token(&tok))
+        .map(|tok| {
+            if likely_needs_token_collapse(&tok) {
+                collapse_repeated_token(&tok)
+            } else {
+                tok
+            }
+        })
         .collect();
 
     token_collapsed.join(" ")
@@ -798,6 +813,58 @@ fn collapse_repeated_token(token: &str) -> String {
     }
 
     token.to_owned()
+}
+
+fn likely_needs_token_collapse(token: &str) -> bool {
+    let char_count = token.chars().count();
+    if !(4..=200).contains(&char_count) {
+        return false;
+    }
+
+    for unit_len in 4..=10 {
+        if unit_len > char_count / 3 {
+            break;
+        }
+
+        let Some((prefix, mut next_start)) = first_n_chars_and_next_start(token, unit_len) else {
+            continue;
+        };
+
+        let mut repeats = 1usize;
+        while let Some((segment, start)) =
+            first_n_chars_and_next_start(&token[next_start..], unit_len)
+        {
+            if segment != prefix {
+                break;
+            }
+            repeats += 1;
+            next_start += start;
+            if repeats >= 3 {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+fn first_n_chars_and_next_start(s: &str, n: usize) -> Option<(&str, usize)> {
+    if n == 0 {
+        return Some(("", 0));
+    }
+
+    let mut iter = s.char_indices();
+    let mut count = 0usize;
+
+    while let Some((idx, ch)) = iter.next() {
+        count += 1;
+        if count == n {
+            let end = idx + ch.len_utf8();
+            return Some((&s[..end], end));
+        }
+    }
+
+    None
 }
 
 struct DialogState {

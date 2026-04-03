@@ -442,7 +442,10 @@ impl OfficeConverter {
     fn is_target_entry(format: &str, name: &str) -> bool {
         match format {
             "docx" => name == "word/document.xml",
-            "xlsx" => name == "xl/sharedStrings.xml",
+            "xlsx" => {
+                name == "xl/sharedStrings.xml"
+                    || (name.starts_with("xl/worksheets/") && name.ends_with(".xml"))
+            },
             "pptx" => {
                 // Convert ppt/slides/*.xml and ppt/notesSlides/*.xml, excluding *.rels
                 let is_xml = name.ends_with(".xml");
@@ -619,7 +622,10 @@ mod tests {
     use super::*;
     use std::fs;
     use std::io::Cursor;
-    use zip::ZipArchive;
+    use zip::{
+        write::{ExtendedFileOptions, FileOptions},
+        CompressionMethod, ZipArchive, ZipWriter,
+    };
 
     #[test]
     fn test_convert_bytes_docx_s2t_with_punct() {
@@ -669,6 +675,113 @@ mod tests {
         assert!(
             found_document_xml,
             "Converted docx is missing word/document.xml"
+        );
+    }
+
+    #[test]
+    fn test_convert_bytes_xlsx_s2t_with_punct() {
+        // Arrange
+        let input_path = "Oneday.xlsx";
+        let input_bytes =
+            fs::read(input_path).expect("Failed to read Oneday.xlsx (must exist at crate root)");
+
+        let opencc = OpenCC::new();
+
+        // Act
+        let (out_bytes, converted_count) = OfficeConverter::convert_bytes(
+            &input_bytes,
+            "xlsx",
+            &opencc,
+            "s2t",
+            true,
+            true,
+        )
+        .expect("convert_bytes failed");
+
+        // Assert: basic sanity
+        assert!(
+            !out_bytes.is_empty(),
+            "Output ZIP bytes should not be empty"
+        );
+
+        assert!(
+            converted_count > 0,
+            "Expected at least one converted XLSX XML fragment"
+        );
+
+        // Assert: output is a valid ZIP archive
+        let cursor = Cursor::new(out_bytes);
+        let mut zip = ZipArchive::new(cursor).expect("Output is not a valid ZIP archive");
+
+        // Assert: xlsx core files still exist
+        let mut found_shared_strings_xml = false;
+        let mut found_sheet_xml = false;
+        for i in 0..zip.len() {
+            let entry = zip.by_index(i).unwrap();
+            match entry.name().replace('\\', "/").as_str() {
+                "xl/sharedStrings.xml" => found_shared_strings_xml = true,
+                "xl/worksheets/sheet1.xml" => found_sheet_xml = true,
+                _ => {}
+            }
+        }
+
+        assert!(
+            found_shared_strings_xml,
+            "Converted xlsx is missing xl/sharedStrings.xml"
+        );
+        assert!(
+            found_sheet_xml,
+            "Converted xlsx is missing xl/worksheets/sheet1.xml"
+        );
+    }
+
+    #[test]
+    fn test_convert_bytes_xlsx_inline_string_cells() {
+        let mut input_cursor = Cursor::new(Vec::<u8>::new());
+        {
+            let mut zip = ZipWriter::new(&mut input_cursor);
+            let opts: FileOptions<'_, ExtendedFileOptions> =
+                FileOptions::default().compression_method(CompressionMethod::Deflated);
+
+            zip.start_file("[Content_Types].xml", opts.clone()).unwrap();
+            zip.write_all(br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>"#)
+                .unwrap();
+
+            zip.start_file("xl/worksheets/sheet1.xml", opts).unwrap();
+            zip.write_all("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData><row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>汉语</t></is></c></row></sheetData></worksheet>".as_bytes())
+                .unwrap();
+
+            zip.finish().unwrap();
+        }
+
+        let opencc = OpenCC::new();
+
+        let (out_bytes, converted_count) = OfficeConverter::convert_bytes(
+            input_cursor.get_ref(),
+            "xlsx",
+            &opencc,
+            "s2t",
+            true,
+            true,
+        )
+        .expect("convert_bytes failed");
+
+        assert_eq!(
+            converted_count, 1,
+            "Expected the worksheet inline-string XML to be converted"
+        );
+
+        let cursor = Cursor::new(out_bytes);
+        let mut zip = ZipArchive::new(cursor).expect("Output is not a valid ZIP archive");
+        let mut sheet = zip
+            .by_name("xl/worksheets/sheet1.xml")
+            .expect("Converted xlsx is missing xl/worksheets/sheet1.xml");
+        let mut content = String::new();
+        sheet.read_to_string(&mut content).unwrap();
+
+        assert!(
+            content.contains("漢語"),
+            "Expected inline string content to be converted, got: {content}"
         );
     }
 }

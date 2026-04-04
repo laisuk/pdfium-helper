@@ -8,6 +8,11 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased - 2026-04-02
 
+### Fixed
+
+- Fixed XLSX conversion to also process worksheet inline strings (`t="inlineStr"`), preventing missed text conversion in
+  hybrid workbooks that contain both shared strings and inline strings
+
 ### Added
 
 * Added `PdfiumLibrary::global_with_fallbacks()` for process-global native loading with a stable shared handle and

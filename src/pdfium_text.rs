@@ -2,6 +2,7 @@
 
 use crate::pdfium_loader::{PdfiumLibrary, PdfiumLoadError};
 use std::collections::HashMap;
+use std::ffi::c_char;
 use std::sync::{Mutex, OnceLock};
 
 type FPDF_DOCUMENT = *mut core::ffi::c_void;
@@ -17,7 +18,7 @@ macro_rules! pdfium_fn {
 type FPDF_InitLibrary = pdfium_fn!(fn());
 type FPDF_DestroyLibrary = pdfium_fn!(fn());
 
-type FPDF_LoadDocument = pdfium_fn!(fn(*const i8, *const i8) -> FPDF_DOCUMENT);
+type FPDF_LoadDocument = pdfium_fn!(fn(*const c_char, *const c_char) -> FPDF_DOCUMENT);
 type FPDF_CloseDocument = pdfium_fn!(fn(FPDF_DOCUMENT));
 
 type FPDF_GetPageCount = pdfium_fn!(fn(FPDF_DOCUMENT) -> i32);

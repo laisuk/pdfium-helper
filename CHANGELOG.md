@@ -23,6 +23,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   valid snippet.
 - Revised `USER_GUIDE.md` Rust code samples so editor tooling can treat them as self-contained examples instead of
   incomplete fragments.
+- Update Pdfium natives to version `PDFium 148.0.7776.0`
 
 ### Fixed
 

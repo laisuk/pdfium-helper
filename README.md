@@ -1,5 +1,11 @@
 # pdfium-helper
 
+[![GitHub release](https://img.shields.io/github/v/release/laisuk/pdfium-helper?sort=semver)](https://github.com/laisuk/pdfium-helper/releases)
+[![Latest Downloads](https://img.shields.io/github/downloads/laisuk/pdfium-helper/latest/total.svg)](https://github.com/laisuk/pdfium-helper/releases/latest)
+[![License](https://img.shields.io/crates/l/pdfium-helper)](https://github.com/laisuk/pdfium-helper/blob/master/LICENSE)
+![Build Status](https://github.com/laisuk/pdfium-helper/actions/workflows/release-opencc-rs.yml/badge.svg)
+
+
 **pdfium-helper** is an internal Rust helper crate that provides safe, ergonomic access to **PDFium** for **PDF text extraction** and **CJK-aware paragraph reflow**.
 
 It is designed primarily to support **OpenCC tooling** (such as the `opencc-rs` CLI and related bindings), and is not intended to be a general-purpose PDF library.

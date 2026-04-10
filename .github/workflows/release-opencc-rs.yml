@@ -35,7 +35,7 @@ jobs:
             os: macos-latest
             bin_name: opencc-rs
             asset_name: opencc-rs-macos-arm64.zip
-            pdfium_subdir: osx-arm64
+            pdfium_subdir: macos-arm64
             pdfium_lib: libpdfium.dylib
 
     steps:

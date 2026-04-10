@@ -6,6 +6,30 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.1.2] - 2026-04-11
+
+### Added
+
+- Added `USER_GUIDE.md`, a practical Rust-facing user manual covering Pdfium loading, extraction, reflow, error handling,
+  and common integration patterns.
+- Added `PdfiumExtractError::pretty()` for richer caller-controlled CLI error rendering without requiring the library to
+  print directly to stderr.
+
+### Changed
+
+- Replaced the old public `print_error()` helper with the new `PdfiumExtractError::pretty()` display adapter so the
+  library exposes formatted error information without owning console output.
+- Updated `README.md` to link to the new user guide and corrected the `Typical usage` Rust example to be a complete,
+  valid snippet.
+- Revised `USER_GUIDE.md` Rust code samples so editor tooling can treat them as self-contained examples instead of
+  incomplete fragments.
+
+### Fixed
+
+- Fixed the Linux arm64 embedded Pdfium path/configuration type mismatch that caused build issues on that target.
+
+---
+
 ## Unreleased - 2026-04-02
 
 ### Fixed

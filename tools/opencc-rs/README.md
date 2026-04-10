@@ -17,7 +17,7 @@ It is designed to be **portable**, **dependency-light**, and **easy to use** for
 - 🚀 High-performance OpenCC conversion (`opencc-fmmseg` Rust backend)
 - 📄 Convert plain text files
 - 📦 Convert Office / EPUB documents
-- 📕 Extract and convert text-embedded PDFs (`PDFium` backend)
+- 📕 Extract and convert text-embedded PDFs (**bundled PDFium backend**)
 - 🧠 CJK-aware paragraph reflow (novels / ebooks friendly)
 - 📊 Live page-by-page PDF progress display
 - 🧳 Portable: no installer, no system dependencies
@@ -34,45 +34,36 @@ It is designed to be **portable**, **dependency-light**, and **easy to use** for
 ### Option 1: Download prebuilt binaries (recommended)
 
 1. Go to **GitHub Releases**
-2. Download:
-    - `opencc-rs-<platform>.zip`
-    - Pdfium native libraries (see below)
-3. Extract into the same directory
+2. Download the appropriate package:
+
+    - `opencc-rs-win-x64.zip`
+    - `opencc-rs-linux-x64.zip`
+    - `opencc-rs-macos-arm64.zip`
+
+3. Extract the zip file
 
 You can now run `opencc-rs` directly.
 
+> ✅ **Out-of-the-box ready**
+>
+> Each release package already includes the required **Pdfium native library**.
+> No additional setup is required.
+
 ---
 
-## Pdfium native library setup (important)
+## Pdfium runtime note
 
-`opencc-rs` does **not bundle** Pdfium.
-You must provide Pdfium native libraries yourself.
+Each release package includes the correct **Pdfium native library** for the target platform:
 
-### Easiest way (recommended)
+- Windows → `pdfium.dll`
+- Linux → `libpdfium.so`
+- macOS → `libpdfium.dylib`
 
-If you are unsure which native library to download:
+### ⚠️ Important
 
-```
-opencc-rs.exe
-pdfium/
-  win-x64/pdfium.dll
-  linux-x64/libpdfium.so
-  osx-arm64/libpdfium.dylib
-```
+The native library must remain **in the same directory** as the executable.
 
-Just copy the entire `pdfium/` directory next to the executable.
-`opencc-rs` will automatically select the correct one.
-
-### Advanced (single library)
-
-You may also place **one native library** next to the executable:
-
-```
-opencc-rs.exe
-pdfium.dll        (Windows)
-libpdfium.so     (Linux)
-libpdfium.dylib  (macOS)
-```
+Do not remove or move the file, otherwise PDF features will not work.
 
 ---
 

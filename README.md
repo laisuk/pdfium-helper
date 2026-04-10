@@ -2,7 +2,7 @@
 
 [![GitHub release](https://img.shields.io/github/v/release/laisuk/pdfium-helper?sort=semver)](https://github.com/laisuk/pdfium-helper/releases)
 [![Latest Downloads](https://img.shields.io/github/downloads/laisuk/pdfium-helper/latest/total.svg)](https://github.com/laisuk/pdfium-helper/releases/latest)
-[![License](https://img.shields.io/crates/l/pdfium-helper)](https://github.com/laisuk/pdfium-helper/blob/master/LICENSE)
+[![License](https://img.shields.io/github/license/laisuk/pdfium-helper)](https://github.com/laisuk/pdfium-helper/blob/master/LICENSE)
 
 **pdfium-helper** is an internal Rust helper crate that provides safe, ergonomic access to **PDFium** for **PDF text extraction** and **CJK-aware paragraph reflow**.
 

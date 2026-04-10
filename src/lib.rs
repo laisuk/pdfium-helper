@@ -9,8 +9,7 @@ pub use pdfium_loader::{PdfiumLibrary, PdfiumLoadError};
 pub use pdfium_text::{
     extract_pdf_pages_with_callback_pdfium,
     extract_pdf_text_pdfium,
-    PdfiumExtractError,
-    print_error,
+    PdfiumExtractError
 };
 pub use reflow_helper::reflow_cjk_paragraphs;
 pub use reflow_helper::reflow_cjk_paragraphs_with_heading_regex;

@@ -118,7 +118,7 @@ fn main() {
 
     if let Err(e) = result {
         if let Some(pe) = e.downcast_ref::<PdfiumExtractError>() {
-            pdfium_helper::print_error(pe);
+            eprintln!("{}", pe.pretty());
         } else {
             eprintln!("Error: {e}");
         }

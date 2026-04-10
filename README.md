@@ -6,6 +6,8 @@ It is designed primarily to support **OpenCC tooling** (such as the `opencc-rs` 
 
 This repository is public for transparency and auditability.
 
+For practical API usage, see [USER_GUIDE.md](USER_GUIDE.md).
+
 ---
 
 ## Purpose and scope
@@ -220,14 +222,18 @@ In other words, this is a raw Pdfium-text layer, not a layout-faithful page reco
 ### Typical usage
 
 ```rust
-extract_pdf_pages_with_callback_pdfium(
-    &pdfium,
-    input_path,
-    false,
-    |page, total, text| {
-        // page-based callback for progress or streaming output
-    },
-)?;
+use pdfium_helper::{extract_pdf_pages_with_callback_pdfium, PdfiumLibrary};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let (pdfium, _path) = PdfiumLibrary::load_with_fallbacks()?;
+    let input_path = "document.pdf";
+
+    extract_pdf_pages_with_callback_pdfium(&pdfium, input_path, false, |page, total, text| {
+        println!("page {page}/{total}: {} chars", text.chars().count());
+    })?;
+
+    Ok(())
+}
 ```
 
 This design enables progress reporting, early cancellation, and memory-efficient streaming.

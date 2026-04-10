@@ -117,18 +117,29 @@ impl PdfiumLastError {
     }
 }
 
-// #[allow(dead_code)]
-pub fn print_error(e: &PdfiumExtractError) {
-    match e {
-        PdfiumExtractError::LoadDocument { path, error } => {
-            eprintln!("Error: failed to open PDF");
-            eprintln!("  Path   : {}", path);
-            eprintln!("  PDFium : {} — {}", error, error.message());
-            eprintln!("  Hint   : {}", error.hint());
+struct PrettyPdfiumExtractError<'a>(&'a PdfiumExtractError);
+
+impl std::fmt::Display for PrettyPdfiumExtractError<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            PdfiumExtractError::LoadDocument { path, error } => {
+                write!(
+                    f,
+                    "Error: failed to open PDF\n  Path   : {}\n  PDFium : {} - {}\n  Hint   : {}",
+                    path,
+                    error,
+                    error.message(),
+                    error.hint()
+                )
+            }
+            other => write!(f, "Error: {other}"),
         }
-        other => {
-            eprintln!("Error: {other}");
-        }
+    }
+}
+
+impl PdfiumExtractError {
+    pub fn pretty(&self) -> impl std::fmt::Display + '_ {
+        PrettyPdfiumExtractError(self)
     }
 }
 

@@ -31,7 +31,7 @@ jobs:
             pdfium_subdir: linux-x64
             pdfium_lib: libpdfium.so
 
-          - name: osx-arm64
+          - name: macos-arm64
             os: macos-latest
             bin_name: opencc-rs
             asset_name: opencc-rs-macos-arm64.zip

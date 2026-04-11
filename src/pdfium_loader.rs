@@ -523,9 +523,9 @@ impl PdfiumLibrary {
 
     #[cfg(feature = "pdfium-embed")]
     fn embedded_version_tag() -> &'static str {
-        // Put *your* PDFium build version here (or crate version).
+        // Reads the version from the workspace root at compile time.
         // Important on Windows: change this when you ship a new DLL so it writes a new filename.
-        "148.0.7776.0"
+        include_str!("../PDFIUM_VERSION").trim()
     }
 
     #[cfg(feature = "pdfium-embed")]

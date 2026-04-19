@@ -51,6 +51,8 @@ pub fn metadata_keys() -> &'static HashSet<&'static str> {
             "译者",
             "校訂",
             "校订",
+            "產品經理",
+            "产品经理",
             "出版社",
             "出版時間",
             "出版时间",

@@ -18,7 +18,7 @@ zip = { version = "=3.0", default-features = false, features = ["deflate"] }
 #crc = "=3.3.0"
 #time = "=0.3.41"
 #time-core = "=0.1.4"
-clap_lex="=1.0.1"
+clap_lex="=1.0"
 rustc-hash = "=2.1.1"
 #opencc-fmmseg = { git = "https://github.com/laisuk/opencc-fmmseg.git", branch = "master" }
 opencc-fmmseg = "0.9"

@@ -3,40 +3,125 @@ name: release-opencc-rs
 on:
   push:
     tags:
-      - "v*"
+      - 'v*.*.*'
+      - 'v*.*.*-beta*'
 
 permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    name: Build & Package (${{ matrix.name }})
+  build:
+    name: Build (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
-
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: win-x64
-            os: windows-latest
-            bin_name: opencc-rs.exe
-            asset_name: opencc-rs-win-x64.zip
-            pdfium_subdir: win-x64
-            pdfium_lib: pdfium.dll
-
           - name: linux-x64
             os: ubuntu-latest
-            bin_name: opencc-rs
-            asset_name: opencc-rs-linux-x64.zip
+            platform: linux
+            arch: x64
+            bin_ext: ''
+            archive_ext: tar.gz
+            rust_toolchain: stable
+            is_win7: false
+            cargo_cmd: cargo build --release -p opencc-rs
+            target_release_dir: target/release
             pdfium_subdir: linux-x64
             pdfium_lib: libpdfium.so
+            manylinux_image: quay.io/pypa/manylinux2014_x86_64:latest
+
+          - name: linux-arm64
+            os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            bin_ext: ''
+            archive_ext: tar.gz
+            rust_toolchain: stable
+            is_win7: false
+            cargo_cmd: cargo build --release -p opencc-rs
+            target_release_dir: target/release
+            pdfium_subdir: linux-arm64
+            pdfium_lib: libpdfium.so
+            manylinux_image: quay.io/pypa/manylinux2014_aarch64:latest
 
           - name: macos-arm64
             os: macos-latest
-            bin_name: opencc-rs
-            asset_name: opencc-rs-macos-arm64.zip
+            platform: macos
+            arch: arm64
+            bin_ext: ''
+            archive_ext: tar.gz
+            rust_toolchain: stable
+            is_win7: false
+            cargo_cmd: cargo build --release -p opencc-rs
+            target_release_dir: target/release
             pdfium_subdir: macos-arm64
             pdfium_lib: libpdfium.dylib
+
+          - name: macos-x64
+            os: macos-15-intel
+            platform: macos
+            arch: x64
+            bin_ext: ''
+            archive_ext: tar.gz
+            rust_toolchain: stable
+            is_win7: false
+            cargo_cmd: cargo build --release -p opencc-rs
+            target_release_dir: target/release
+            pdfium_subdir: macos-x64
+            pdfium_lib: libpdfium.dylib
+
+          - name: win-x64
+            os: windows-latest
+            platform: windows
+            arch: x64
+            bin_ext: '.exe'
+            archive_ext: zip
+            rust_toolchain: stable
+            is_win7: false
+            cargo_cmd: cargo build --release -p opencc-rs
+            target_release_dir: target/release
+            pdfium_subdir: win-x64
+            pdfium_lib: pdfium.dll
+
+          - name: win-arm64
+            os: windows-11-arm
+            platform: windows
+            arch: arm64
+            bin_ext: '.exe'
+            archive_ext: zip
+            rust_toolchain: stable
+            is_win7: false
+            cargo_cmd: cargo build --release -p opencc-rs
+            target_release_dir: target/release
+            pdfium_subdir: win-arm64
+            pdfium_lib: pdfium.dll
+
+          - name: win7-x64
+            os: windows-latest
+            platform: windows
+            arch: win7-x64
+            bin_ext: '.exe'
+            archive_ext: zip
+            rust_toolchain: nightly
+            is_win7: true
+            cargo_cmd: cargo +nightly build -Z build-std=std,panic_abort --target x86_64-win7-windows-msvc --release -p opencc-rs
+            target_release_dir: target/x86_64-win7-windows-msvc/release
+            pdfium_subdir: win-x64
+            pdfium_lib: pdfium.dll
+
+          - name: win7-x86
+            os: windows-latest
+            platform: windows
+            arch: win7-x86
+            bin_ext: '.exe'
+            archive_ext: zip
+            rust_toolchain: nightly
+            is_win7: true
+            cargo_cmd: cargo +nightly build -Z build-std=std,panic_abort --target i686-win7-windows-msvc --release -p opencc-rs
+            target_release_dir: target/i686-win7-windows-msvc/release
+            pdfium_subdir: win-x86
+            pdfium_lib: pdfium.dll
 
     steps:
       - name: Checkout
@@ -44,55 +129,195 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Normalize cargo home (Linux Docker builds)
+        if: ${{ matrix.platform == 'linux' }}
+        shell: bash
+        run: |
+          echo "CARGO_HOME=${CARGO_HOME:-$HOME/.cargo}" >> "$GITHUB_ENV"
+
+      - name: Set Rust (stable)
+        if: ${{ matrix.rust_toolchain == 'stable' }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Set Rust (nightly)
+        if: ${{ matrix.rust_toolchain == 'nightly' }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          components: rust-src
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
 
-      - name: Install zip (Unix)
-        if: runner.os != 'Windows'
+      - name: manylinux preflight
+        if: ${{ matrix.platform == 'linux' }}
+        shell: bash
         run: |
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            sudo apt-get update && sudo apt-get install -y zip
+          set -euxo pipefail
+          IMAGE="${{ matrix.manylinux_image }}"
+
+          docker run --rm \
+            --entrypoint /bin/sh \
+            "$IMAGE" -lc '
+              uname -a || true
+              cat /etc/os-release || true
+              ldd --version || true
+            '
+
+      - name: Build Project (manylinux2014 Docker)
+        if: ${{ matrix.platform == 'linux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="${{ matrix.manylinux_image }}"
+
+          docker run --rm \
+            --entrypoint /bin/bash \
+            -v "${GITHUB_WORKSPACE}:/io" \
+            -w /io \
+            -v "${CARGO_HOME}:/cargo" \
+            -v "${HOME}/.rustup:/rustup" \
+            -e CARGO_HOME=/cargo \
+            -e RUSTUP_HOME=/rustup \
+            -e PATH="/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+            -e RUSTC_WRAPPER= \
+            -e SCCACHE_DISABLE=1 \
+            "$IMAGE" -lc '
+              set -euxo pipefail
+
+              if [ -d /opt/rh/devtoolset-11/root/usr/bin ]; then
+                export PATH="/opt/rh/devtoolset-11/root/usr/bin:$PATH"
+              elif [ -d /opt/rh/devtoolset-10/root/usr/bin ]; then
+                export PATH="/opt/rh/devtoolset-10/root/usr/bin:$PATH"
+              fi
+
+              if ! command -v cc >/dev/null 2>&1; then
+                ln -sf "$(command -v gcc)" /usr/bin/cc
+              fi
+
+              export CC=gcc
+              export CXX=g++
+              export AR=ar
+              export RUSTFLAGS="-C linker=gcc"
+
+              ${{ matrix.cargo_cmd }}
+
+              readelf -sW ${{ matrix.target_release_dir }}/opencc-rs${{ matrix.bin_ext }} \
+                | grep -o "GLIBC_[0-9.]*" | sort -V | tail -n 1
+            '
+
+          sudo chown -R "$(id -u)":"$(id -g)" target || true
+
+      - name: Verify manylinux2014 GLIBC (<= 2.17)
+        if: ${{ matrix.platform == 'linux' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe="${{ matrix.target_release_dir }}/opencc-rs${{ matrix.bin_ext }}"
+          max_ver="$(readelf -sW "$exe" | grep -o 'GLIBC_[0-9.]*' | sort -V | tail -n 1)"
+          echo "Max GLIBC requirement: $max_ver"
+          if [[ "$(printf '%s\n' "GLIBC_2.17" "$max_ver" | sort -V | tail -n 1)" != "GLIBC_2.17" ]]; then
+            echo "Too new: $max_ver (need <= GLIBC_2.17)"
+            exit 1
+          fi
+          echo "manylinux2014-compatible"
+
+      - name: Build Project
+        if: ${{ matrix.platform != 'linux' }}
+        shell: bash
+        env:
+          RUSTFLAGS: ${{ matrix.is_win7 && '-C link-arg=/SUBSYSTEM:CONSOLE,6.01' || '' }}
+        run: |
+          set -euo pipefail
+          ${{ matrix.cargo_cmd }}
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: ${{ matrix.is_win7 }}
+
+      - name: Verify Win7 subsystem (6.01)
+        if: ${{ matrix.is_win7 }}
+        shell: powershell
+        run: |
+          $outDir = "${{ matrix.target_release_dir }}"
+          $exe = Join-Path $outDir ("opencc-rs${{ matrix.bin_ext }}")
+          if (!(Test-Path $exe)) { throw "Missing Win7 exe: $exe" }
+
+          $out = & dumpbin /headers $exe | Select-String -Pattern "subsystem version"
+          $text = ($out | ForEach-Object { $_.ToString() }) -join "`n"
+          Write-Host $text
+          if ($text -notmatch "6\.01") { throw "Subsystem is not 6.01: $exe" }
+
+      - name: Prepare Release Folder
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          OUT_DIR="${{ matrix.target_release_dir }}"
+          ARTIFACT_DIR="dist/opencc-rs-${{ github.ref_name }}-${{ matrix.name }}"
+          mkdir -p "$ARTIFACT_DIR"
+
+          cp "${OUT_DIR}/opencc-rs${{ matrix.bin_ext }}" "$ARTIFACT_DIR/"
+          cp "tools/opencc-rs/README.md" "$ARTIFACT_DIR/README.md"
+
+          # Package the matching shipped pdfium binary for each target.
+          cp "pdfium/${{ matrix.pdfium_subdir }}/${{ matrix.pdfium_lib }}" "$ARTIFACT_DIR/${{ matrix.pdfium_lib }}"
+
+      - name: Package Release Artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARTIFACT_NAME="opencc-rs-${{ github.ref_name }}-${{ matrix.name }}"
+          if [ "${{ matrix.archive_ext }}" = "tar.gz" ]; then
+            tar -czf "${ARTIFACT_NAME}.tar.gz" -C "dist/${ARTIFACT_NAME}" .
+          else
+            7z a "${ARTIFACT_NAME}.zip" ./dist/${ARTIFACT_NAME}/*
           fi
 
-      - name: Build (release)
-        run: cargo build --release -p opencc-rs
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencc-rs-${{ github.ref_name }}-${{ matrix.name }}
+          path: opencc-rs-${{ github.ref_name }}-${{ matrix.name }}.${{ matrix.archive_ext }}
 
-      - name: Prepare package dir
+  release:
+    name: Release Artifacts
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Detect release channel from tag
+        id: tagmeta
         shell: bash
         run: |
           set -euo pipefail
-          PKG_DIR="dist/opencc-rs-${{ matrix.name }}"
-          mkdir -p "$PKG_DIR"
+          TAG="${GITHUB_REF_NAME}"
 
-          cp "target/release/${{ matrix.bin_name }}" "$PKG_DIR/"
-          cp "tools/opencc-rs/README.md" "$PKG_DIR/README.md"
-          cp "pdfium/${{ matrix.pdfium_subdir }}/${{ matrix.pdfium_lib }}" "$PKG_DIR/${{ matrix.pdfium_lib }}"
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta[0-9]+$ ]]; then
+            echo "is_beta=true" >> "$GITHUB_OUTPUT"
+            echo "release_name=opencc-rs ${TAG} (Beta)" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_beta=false" >> "$GITHUB_OUTPUT"
+            echo "release_name=opencc-rs ${TAG}" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Create zip (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $pkg = "dist/opencc-rs-${{ matrix.name }}"
-          $zip = "dist/${{ matrix.asset_name }}"
-          if (Test-Path $zip) { Remove-Item $zip -Force }
-          Compress-Archive -Path "$pkg\*" -DestinationPath $zip
-
-      - name: Create zip (Linux/macOS)
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd dist
-          zip -r "${{ matrix.asset_name }}" "opencc-rs-${{ matrix.name }}"
-
-      - name: Upload release assets
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          name: ${{ steps.tagmeta.outputs.release_name }}
+          prerelease: ${{ steps.tagmeta.outputs.is_beta == 'true' }}
+          make_latest: ${{ steps.tagmeta.outputs.is_beta == 'true' && 'false' || 'true' }}
           files: |
-            dist/${{ matrix.asset_name }}
-          prerelease: ${{ contains(github.ref_name, '-beta') }}
+            artifacts/**/*.zip
+            artifacts/**/*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+

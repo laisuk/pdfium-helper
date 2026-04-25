@@ -6,14 +6,17 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.1.2] - 2026-04-11
+## [0.1.2] - 2026-04-25
 
 ### Added
 
-- Added `USER_GUIDE.md`, a practical Rust-facing user manual covering Pdfium loading, extraction, reflow, error handling,
+- Added `USER_GUIDE.md`, a practical Rust-facing user manual covering Pdfium loading, extraction, reflow, error
+  handling,
   and common integration patterns.
 - Added `PdfiumExtractError::pretty()` for richer caller-controlled CLI error rendering without requiring the library to
   print directly to stderr.
+- Added `compute-pdfium-hash.ps1` to generate a root `VERSION` manifest with `version=...` plus SHA-256 entries for all
+  bundled Pdfium native binaries.
 
 ### Changed
 
@@ -23,7 +26,17 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   valid snippet.
 - Revised `USER_GUIDE.md` Rust code samples so editor tooling can treat them as self-contained examples instead of
   incomplete fragments.
-- Update Pdfium natives to version `PDFium 148.0.7776.0`
+- Updated Pdfium natives to version `PDFium 148.0.7776.0`.
+- Refactored `opencc-rs` Pdfium version reporting to read an explicit `version=...` manifest entry and only display the
+  bundled Pdfium version when the loaded native matches the manifest SHA-256.
+- `opencc-rs` now prefers a root `VERSION` manifest for portable distributions, still falls back to `pdfium/VERSION`,
+  and suppresses version display for successful custom `--pdfium` loads.
+- Normalized Pdfium missing-library diagnostics to use forward-slash display paths for cleaner cross-platform CLI
+  messages.
+- Aligned `.github/workflows/release-opencc-rs.yml` more closely with the `opencc-fmmseg` release workflow, including
+  the expanded runner matrix, manylinux builds, Win7 variants, prerelease handling, and shipping `VERSION` in the
+  release artifact root.
+- Removed duplicated Pdfium platform-folder logic in `opencc-rs` by reusing the shared loader implementation.
 
 ### Fixed
 
@@ -67,3 +80,5 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   a page.
 * Process-global loading improves native library lifetime stability, but applications should still serialize overlapping
   extraction jobs if concurrent Pdfium use is possible.
+
+

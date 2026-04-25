@@ -8,6 +8,15 @@ name = "pdfium-helper"
 version = "0.1.2"
 edition = "2021"
 rust-version = "1.75.0"
+include = [
+    "Cargo.toml",
+    "/LICENSE",
+    "/VERSION",
+    # All source code
+    "src/**/*.rs",
+    # Pdfium natives
+    "pdfium/**"
+]
 
 [dependencies]
 libloading = "=0.8"

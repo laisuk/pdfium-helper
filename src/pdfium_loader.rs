@@ -530,12 +530,23 @@ impl PdfiumLibrary {
             &expected,
         )))
     }
-
     #[cfg(feature = "pdfium-embed")]
     fn embedded_version_tag() -> &'static str {
-        // Reads the version from the workspace root at compile time.
-        // Important on Windows: change this when you ship a new DLL so it writes a new filename.
-        include_str!("../PDFIUM_VERSION").trim()
+        static EMBEDDED_VERSION_TAG: OnceLock<String> = OnceLock::new();
+
+        EMBEDDED_VERSION_TAG.get_or_init(|| {
+            // Reads the version from the workspace root manifest at compile time.
+            // Important on Windows: change this when you ship a new DLL so it writes a new filename.
+            include_str!("../VERSION")
+                .lines()
+                .find_map(|line| {
+                    let line = line.trim();
+                    line.strip_prefix("version=").map(str::trim)
+                })
+                .filter(|version| !version.is_empty())
+                .unwrap_or_else(|| panic!("VERSION manifest is missing a non-empty version= entry"))
+                .to_owned()
+        })
     }
 
     #[cfg(feature = "pdfium-embed")]
@@ -661,3 +672,4 @@ fn decompress_native(zstd_bytes: &[u8]) -> Result<Vec<u8>, PdfiumLoadError> {
 
     Ok(out)
 }
+

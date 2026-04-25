@@ -4,9 +4,11 @@
 [![Latest Downloads](https://img.shields.io/github/downloads/laisuk/pdfium-helper/latest/total.svg)](https://github.com/laisuk/pdfium-helper/releases/latest)
 [![License](https://img.shields.io/github/license/laisuk/pdfium-helper)](https://github.com/laisuk/pdfium-helper/blob/master/LICENSE)
 
-**pdfium-helper** is an internal infrastructure crate for **PDFium** loading, **PDF text extraction**, and **CJK-aware paragraph reflow** within this repository's toolchain.
+**pdfium-helper** is an internal infrastructure crate for **PDFium** loading, **PDF text extraction**, and **CJK-aware
+paragraph reflow** within this repository's toolchain.
 
-It is designed primarily to support **OpenCC tooling** (such as the `opencc-rs` CLI and related bindings), with packaging and build assumptions that are specific to this repository and its internal workflows.
+It is designed primarily to support **OpenCC tooling** (such as the `opencc-rs` CLI and related bindings), with
+packaging and build assumptions that are specific to this repository and its internal workflows.
 
 This repository is public for transparency and auditability.
 
@@ -151,9 +153,11 @@ lifetime of the process and returns a shared `&'static PdfiumLibrary` plus the r
 `detect_platform_folder()` is also re-exported for callers that need the crate's platform folder naming convention, such
 as `win-x64`, `linux-arm64`, or `macos-x64`.
 
-This is useful for GUI backends and services because it avoids repeated native load/unload cycles. It stabilizes library lifetime, but it does
+This is useful for GUI backends and services because it avoids repeated native load/unload cycles. It stabilizes library
+lifetime, but it does
 **not
-** make Pdfium extraction automatically safe for concurrent use. If your application may run overlapping extraction jobs, serialize extraction at the app layer with a
+** make Pdfium extraction automatically safe for concurrent use. If your application may run overlapping extraction
+jobs, serialize extraction at the app layer with a
 `Mutex` or similar guard.
 ---
 

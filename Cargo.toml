@@ -8,6 +8,15 @@ name = "pdfium-helper"
 version = "0.1.2"
 edition = "2021"
 rust-version = "1.75.0"
+authors = ["Laisuk Lai <laisuk@yahoo.com>"]
+description = "Internal PDFium helper crate for native loading, PDF text extraction, and CJK-aware paragraph reflow."
+license = "MIT"
+repository = "https://github.com/laisuk/pdfium-helper"
+homepage = "https://github.com/laisuk/pdfium-helper"
+documentation = "https://docs.rs/pdfium-helper"
+readme = "README.md"
+keywords = ["pdfium", "pdf", "text-extraction", "cjk", "reflow"]
+categories = ["external-ffi-bindings", "text-processing"]
 include = [
     "Cargo.toml",
     "/LICENSE",
@@ -41,3 +50,4 @@ panic = "abort"            # Prevents Rust panics from unwinding, reducing binar
 incremental = false        # Disable incremental builds to fully optimize the release binary
 strip = "symbols"          # Strips debug symbols while retaining export symbols needed for the C API
 debug = 0                  # No debug info in the final binary to reduce size
+

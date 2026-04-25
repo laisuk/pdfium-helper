@@ -4,11 +4,9 @@
 [![Latest Downloads](https://img.shields.io/github/downloads/laisuk/pdfium-helper/latest/total.svg)](https://github.com/laisuk/pdfium-helper/releases/latest)
 [![License](https://img.shields.io/github/license/laisuk/pdfium-helper)](https://github.com/laisuk/pdfium-helper/blob/master/LICENSE)
 
-**pdfium-helper** is an internal Rust helper crate that provides safe, ergonomic access to **PDFium** for **PDF text
-extraction** and **CJK-aware paragraph reflow**.
+**pdfium-helper** is an internal infrastructure crate for **PDFium** loading, **PDF text extraction**, and **CJK-aware paragraph reflow** within this repository's toolchain.
 
-It is designed primarily to support **OpenCC tooling** (such as the `opencc-rs` CLI and related bindings), and is not
-intended to be a general-purpose PDF library.
+It is designed primarily to support **OpenCC tooling** (such as the `opencc-rs` CLI and related bindings), with packaging and build assumptions that are specific to this repository and its internal workflows.
 
 This repository is public for transparency and auditability.
 
@@ -20,7 +18,7 @@ For practical API usage, see [USER_GUIDE.md](USER_GUIDE.md).
 
 ## Purpose and scope
 
-This crate exists to support a very specific workflow:
+This crate exists to support a specific internal workflow:
 
 * Extract readable text from text-embedded PDFs
 * Reflow fragmented CJK text into readable paragraphs
@@ -366,12 +364,12 @@ This project is licensed under the MIT License.
 
 This crate is intended for:
 
-* OpenCC-related tooling
-* CLI tool authors embedding PDFium
-* Ebook / novel processing pipelines
-* Developers studying CJK PDF text extraction and reflow
+* OpenCC-related tools maintained in this repository
+* Internal CLI packaging workflows that ship coordinated Pdfium assets
+* Repository-specific PDF text extraction and CJK reflow pipelines
 
-It is not intended as a general-purpose PDF library.
+It is not intended as a general-purpose PDF library or a standalone public dependency.
+
 
 
 

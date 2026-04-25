@@ -12,6 +12,8 @@ intended to be a general-purpose PDF library.
 
 This repository is public for transparency and auditability.
 
+This crate is for internal Git-based use and is not intended for crates.io distribution.
+
 For practical API usage, see [USER_GUIDE.md](USER_GUIDE.md).
 
 ---
@@ -370,5 +372,6 @@ This crate is intended for:
 * Developers studying CJK PDF text extraction and reflow
 
 It is not intended as a general-purpose PDF library.
+
 
 

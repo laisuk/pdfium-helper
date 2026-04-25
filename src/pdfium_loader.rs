@@ -1,5 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
+
+fn normalize_display_path(path: &Path) -> String {
+    path.display().to_string().replace('\\', "/")
+}
 use thiserror::Error;
 
 #[cfg(feature = "pdfium-embed")]
@@ -78,7 +82,7 @@ pub enum PdfiumLoadError {
     UnsupportedPlatform(String),
 
     #[error("pdfium native library missing: {0}")]
-    MissingLibrary(PathBuf),
+    MissingLibrary(String),
 
     #[error("failed to load pdfium library: {0}")]
     LoadFailed(String),
@@ -252,7 +256,9 @@ impl PdfiumLibrary {
             .join(default_library_name());
 
         if !lib_path.exists() {
-            return Err(PdfiumLoadError::MissingLibrary(lib_path));
+            return Err(PdfiumLoadError::MissingLibrary(normalize_display_path(
+                &lib_path,
+            )));
         }
 
         let lib = unsafe {
@@ -288,7 +294,9 @@ impl PdfiumLibrary {
         };
 
         if !lib_path.exists() {
-            return Err(PdfiumLoadError::MissingLibrary(lib_path));
+            return Err(PdfiumLoadError::MissingLibrary(normalize_display_path(
+                &lib_path,
+            )));
         }
 
         let lib = unsafe {
@@ -518,7 +526,9 @@ impl PdfiumLibrary {
             .join(platform)
             .join(default_library_name());
 
-        Err(PdfiumLoadError::MissingLibrary(expected))
+        Err(PdfiumLoadError::MissingLibrary(normalize_display_path(
+            &expected,
+        )))
     }
 
     #[cfg(feature = "pdfium-embed")]

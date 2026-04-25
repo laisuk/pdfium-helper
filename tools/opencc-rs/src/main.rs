@@ -7,10 +7,11 @@ use encoding_rs::Encoding;
 use encoding_rs_io::DecodeReaderBytesBuilder;
 use opencc_fmmseg::{OpenCC, OpenccConfig};
 use pdfium_helper::{
-    extract_pdf_pages_with_callback_pdfium, reflow_cjk_paragraphs, PdfiumExtractError,
-    PdfiumLibrary,
+    detect_platform_folder, extract_pdf_pages_with_callback_pdfium, reflow_cjk_paragraphs,
+    PdfiumExtractError, PdfiumLibrary,
 };
-use std::collections::HashSet;
+use sha2::{Digest, Sha256};
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, IsTerminal, Read, Write};
 use std::sync::OnceLock;
@@ -399,7 +400,7 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
 
         match PdfiumLibrary::load_from_base_dir_flexible(base) {
             Ok((pdfium, lib_path)) => {
-                print_loaded_pdfium(&lib_path);
+                print_loaded_pdfium(&lib_path, false);
                 pdfium
             }
             Err(e) => {
@@ -410,13 +411,13 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
                 );
 
                 let (pdfium, lib_path) = PdfiumLibrary::load_with_fallbacks()?;
-                print_loaded_pdfium(&lib_path);
+                print_loaded_pdfium(&lib_path, true);
                 pdfium
             }
         }
     } else {
         let (pdfium, lib_path) = PdfiumLibrary::load_with_fallbacks()?;
-        print_loaded_pdfium(&lib_path);
+        print_loaded_pdfium(&lib_path, true);
         pdfium
     };
 
@@ -478,13 +479,137 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn print_loaded_pdfium(path: &std::path::Path) {
-    println!(
-        "Loaded pdfium: {}",
-        path.display().to_string().replace('\\', "/")
-    );
+fn print_loaded_pdfium(path: &std::path::Path, include_version: bool) {
+    let display_path = path.display().to_string().replace('\\', "/");
+    if include_version {
+        match read_pdfium_version(path) {
+            Some(version) => println!("Loaded pdfium: {} (version: {})", display_path, version),
+            None => println!("Loaded pdfium: {}", display_path),
+        }
+    } else {
+        println!("Loaded pdfium: {}", display_path);
+    }
+}
+fn read_pdfium_version(lib_path: &std::path::Path) -> Option<String> {
+    let version_path = find_pdfium_version_file(lib_path)?;
+    let manifest_dir = version_path.parent()?;
+    let relative_path = lib_path
+        .strip_prefix(manifest_dir)
+        .ok()?
+        .display()
+        .to_string()
+        .replace('\\', "/");
+
+    let (version, hashes) = read_pdfium_manifest(&version_path)?;
+    let expected_hash = manifest_hash_candidates(&relative_path, lib_path)
+        .into_iter()
+        .find_map(|candidate| hashes.get(&candidate).cloned())?;
+    let actual_hash = compute_sha256_hex(lib_path)?;
+    if !actual_hash.eq_ignore_ascii_case(&expected_hash) {
+        return None;
+    }
+
+    Some(version)
 }
 
+fn read_pdfium_manifest(
+    version_path: &std::path::Path,
+) -> Option<(String, HashMap<String, String>)> {
+    let contents = std::fs::read_to_string(version_path).ok()?;
+    let mut version = None;
+    let mut hashes = HashMap::new();
+
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        let (key, value) = line.split_once('=')?;
+        let key = key.trim();
+        let value = value.trim();
+        if key.is_empty() || value.is_empty() {
+            continue;
+        }
+
+        if key == "version" {
+            version = Some(value.to_owned());
+            continue;
+        }
+
+        let hash = value.strip_prefix("SHA256:")?.trim();
+        if hash.is_empty() {
+            continue;
+        }
+
+        hashes.insert(key.replace('\\', "/"), hash.to_owned());
+    }
+
+    Some((version?, hashes))
+}
+
+fn manifest_hash_candidates(lib_relative_path: &str, lib_path: &std::path::Path) -> Vec<String> {
+    let mut candidates = Vec::new();
+    push_unique_candidate(&mut candidates, lib_relative_path.to_owned());
+
+    let file_name = lib_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.replace('\\', "/"));
+
+    if let Some(file_name) = file_name {
+        push_unique_candidate(&mut candidates, file_name.clone());
+
+        if let Ok(platform) = detect_platform_folder() {
+            push_unique_candidate(&mut candidates, format!("pdfium/{platform}/{file_name}"));
+            push_unique_candidate(&mut candidates, format!("{platform}/{file_name}"));
+        }
+    }
+
+    candidates
+}
+
+fn push_unique_candidate(candidates: &mut Vec<String>, candidate: String) {
+    if !candidates.iter().any(|existing| existing == &candidate) {
+        candidates.push(candidate);
+    }
+}
+
+fn compute_sha256_hex(path: &std::path::Path) -> Option<String> {
+    let mut file = File::open(path).ok()?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 8192];
+
+    loop {
+        let read = file.read(&mut buffer).ok()?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+
+    Some(format!("{:X}", hasher.finalize()))
+}
+
+fn find_pdfium_version_file(lib_path: &std::path::Path) -> Option<std::path::PathBuf> {
+    let ancestors: Vec<_> = lib_path.ancestors().collect();
+
+    for ancestor in ancestors.iter().rev() {
+        let candidate = ancestor.join("VERSION");
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+
+    for ancestor in ancestors.iter().rev() {
+        let candidate = ancestor.join("pdfium").join("VERSION");
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
 /// Write UTF-8 text using Unix newlines (`\n`) on all platforms
 fn write_text_unix_newlines<P: AsRef<std::path::Path>>(path: P, s: &str) -> io::Result<()> {
     let normalized = s.replace("\r\n", "\n").replace('\r', "\n");

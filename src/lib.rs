@@ -5,7 +5,7 @@ mod punct_sets;
 mod utils;
 mod cjk_text;
 
-pub use pdfium_loader::{PdfiumLibrary, PdfiumLoadError};
+pub use pdfium_loader::{detect_platform_folder, PdfiumLibrary, PdfiumLoadError};
 pub use pdfium_text::{
     extract_pdf_pages_with_callback_pdfium,
     extract_pdf_text_pdfium,
@@ -27,3 +27,4 @@ pub use utils::*;
 //         assert_eq!(result, 4);
 //     }
 // }
+

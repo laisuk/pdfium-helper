@@ -261,6 +261,7 @@ jobs:
 
           cp "${OUT_DIR}/opencc-rs${{ matrix.bin_ext }}" "$ARTIFACT_DIR/"
           cp "tools/opencc-rs/README.md" "$ARTIFACT_DIR/README.md"
+          cp "VERSION" "$ARTIFACT_DIR/VERSION"
 
           # Package the matching shipped pdfium binary for each target.
           cp "pdfium/${{ matrix.pdfium_subdir }}/${{ matrix.pdfium_lib }}" "$ARTIFACT_DIR/${{ matrix.pdfium_lib }}"
@@ -319,5 +320,6 @@ jobs:
             artifacts/**/*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
 

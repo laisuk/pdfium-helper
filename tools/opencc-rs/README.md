@@ -34,36 +34,70 @@ It is designed to be **portable**, **dependency-light**, and **easy to use** for
 ### Option 1: Download prebuilt binaries (recommended)
 
 1. Go to **GitHub Releases**
-2. Download the appropriate package:
-
-    - `opencc-rs-win-x64.zip`
-    - `opencc-rs-linux-x64.zip`
-    - `opencc-rs-macos-arm64.zip`
-
-3. Extract the zip file
+2. Download the appropriate package for your platform
+3. Extract the archive
 
 You can now run `opencc-rs` directly.
 
 > ✅ **Out-of-the-box ready**
 >
-> Each release package already includes the required **Pdfium native library**.
-> No additional setup is required.
+> Each release package includes:
+>
+> - `opencc-rs`
+> - the matching platform Pdfium native library
+> - `README.md`
+> - `VERSION` manifest for verified bundled-version reporting
+
+### Portable runtime layout
+
+Current release packages use a flat portable layout:
+
+```text
+opencc-rs(.exe)
+pdfium.dll / libpdfium.so / libpdfium.dylib
+VERSION
+README.md
+```
+
+Keep the native library in the same directory as `opencc-rs` unless you explicitly load Pdfium from another location
+with `--pdfium`.
 
 ---
 
 ## Pdfium runtime note
 
-Each release package includes the correct **Pdfium native library** for the target platform:
+`opencc-rs` tries to load Pdfium in this order:
 
-- Windows → `pdfium.dll`
-- Linux → `libpdfium.so`
-- macOS → `libpdfium.dylib`
+1. The custom path or base directory passed via `--pdfium`
+2. The default `pdfium-helper` fallback search:
+    - directory containing the current executable
+    - current working directory
+    - `CARGO_MANIFEST_DIR` during development
+    - embedded Pdfium fallback when built with the `pdfium-embed` feature
 
-### ⚠️ Important
+For each search location, the loader tries:
 
-The native library must remain **in the same directory** as the executable.
+- a side-by-side native library in the same directory as the executable
+- then a bundled `pdfium/<platform>/...` layout
 
-Do not remove or move the file, otherwise PDF features will not work.
+### Version display behavior
+
+When `opencc-rs` loads bundled or default-discovered Pdfium, it may print a verified version line such as:
+
+```text
+Loaded pdfium: R:/PortableApps/pdfium.dll (version: 148.0.7776.0)
+```
+
+This only happens when:
+
+- a `VERSION` manifest is present at the portable root or under `pdfium/VERSION`
+- the manifest contains `version=...`
+- the manifest contains a matching SHA-256 entry for the loaded native library
+
+If the manifest is missing or does not match the native binary, `opencc-rs` silently falls back to printing the loaded
+path only.
+
+If you pass `--pdfium`, version display is intentionally suppressed for that successful custom load.
 
 ---
 
@@ -118,7 +152,7 @@ Options:
 
 ## PDF conversion
 
-```
+```text
 opencc-rs pdf -i book.pdf -c s2t -p -r
 ```
 
@@ -127,21 +161,25 @@ opencc-rs pdf -i book.pdf -c s2t -p -r
 - `-r, --reflow`       Reflow CJK paragraphs (recommended for novels)
 - `--compact`          Compact reflow output
 - `-H, --header`       Add page headers like `=== [Page 3/120] ===`
+- `-e, --extract`      Extract PDF text only without OpenCC conversion
+- `--pdfium <dir>`     Custom Pdfium file or base directory; falls back to default lookup if loading fails
 
 If no output file is specified:
 
-```
-input.pdf → input_converted.txt
+```text
+input.pdf -> input_converted.txt
 ```
 
 ### Example output
 
-```
-[4410/4410] (100%) Extracted 191 chars
+```text
+Extracting PDF page-by-page with PDFium: book.pdf
+Loaded pdfium: /path/to/pdfium.dll (version: 148.0.7776.0)
+Loading [4410/4410] (100%) Extracted 191 chars
 Total extracted characters: 1,598,793
 Reflowing CJK paragraphs...
-Converting with OpenCC (config=s2t, punct=true) ...
-Done.
+Converting with Opencc-Fmmseg (config=s2t, punct=true) ...
+✅  PDF converted.
 ```
 
 ---
@@ -161,16 +199,20 @@ target/release/opencc-rs pdf -i book.pdf -c s2t -p -r
 
 ## Development
 
-```
+```text
 cargo build --release
 ```
 
-For development, `Pdfium` can be placed in:
+For development, Pdfium can be provided via:
 
-- executable directory
-- current working directory
-- `pdfium/<platform>/` layout
-- directory specified by `PDFIUM_LIB_DIR`
+- `--pdfium <dir>` or `--pdfium <file>`
+- the executable directory
+- the current working directory
+- a bundled `pdfium/<platform>/` layout
+- the directory specified by `PDFIUM_LIB_DIR`
+
+If you build a portable distribution and want verified version reporting, place a compatible `VERSION` manifest at the
+artifact root.
 
 ---
 
@@ -223,3 +265,5 @@ This project is licensed under the **MIT License**.
 - OpenCC project
 - PDFium project
 - opencc-fmmseg project
+
+

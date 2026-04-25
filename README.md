@@ -4,9 +4,11 @@
 [![Latest Downloads](https://img.shields.io/github/downloads/laisuk/pdfium-helper/latest/total.svg)](https://github.com/laisuk/pdfium-helper/releases/latest)
 [![License](https://img.shields.io/github/license/laisuk/pdfium-helper)](https://github.com/laisuk/pdfium-helper/blob/master/LICENSE)
 
-**pdfium-helper** is an internal Rust helper crate that provides safe, ergonomic access to **PDFium** for **PDF text extraction** and **CJK-aware paragraph reflow**.
+**pdfium-helper** is an internal Rust helper crate that provides safe, ergonomic access to **PDFium** for **PDF text
+extraction** and **CJK-aware paragraph reflow**.
 
-It is designed primarily to support **OpenCC tooling** (such as the `opencc-rs` CLI and related bindings), and is not intended to be a general-purpose PDF library.
+It is designed primarily to support **OpenCC tooling** (such as the `opencc-rs` CLI and related bindings), and is not
+intended to be a general-purpose PDF library.
 
 This repository is public for transparency and auditability.
 
@@ -49,7 +51,9 @@ It intentionally avoids broader PDF concerns such as rendering, OCR, or editing.
 
 Only text-embedded PDFs are supported.
 
-Scanned PDFs (image-only, OCR-required, or DRM-protected image pages) will not produce usable output. If PDFium cannot extract text from a page, the extracted text for that page is emitted as a single blank-line marker (`"\n"`) so downstream consumers can still preserve page progress and page-boundary structure.
+Scanned PDFs (image-only, OCR-required, or DRM-protected image pages) will not produce usable output. If PDFium cannot
+extract text from a page, the extracted text for that page is emitted as a single blank-line marker (`"\n"`) so
+downstream consumers can still preserve page progress and page-boundary structure.
 
 ---
 
@@ -102,6 +106,26 @@ pdfium/
 
 This layout allows shipping multiple platforms together.
 
+### Optional `VERSION` manifests
+
+For portable tools that want to report the bundled Pdfium version, a manifest may also be shipped at either:
+
+* `<dir>/VERSION`
+* `<dir>/pdfium/VERSION`
+
+Current portable releases prefer a root `VERSION` file.
+
+The manifest format is line-oriented and uses an explicit version field plus optional SHA-256 entries:
+
+```text
+version=148.0.7776.0
+pdfium/win-x64/pdfium.dll=SHA256:...
+pdfium/linux-x64/libpdfium.so=SHA256:...
+```
+
+The library loader itself does **not** require this file to load Pdfium. It is only used by downstream tools such as
+`opencc-rs` for verified version display.
+
 ### Load order
 
 The loader attempts the following locations in order:
@@ -110,6 +134,7 @@ The loader attempts the following locations in order:
 2. Directory containing the current executable
 3. Current working directory
 4. `CARGO_MANIFEST_DIR` (development fallback)
+5. Embedded Pdfium fallback when the `pdfium-embed` feature is enabled
 
 For each location:
 
@@ -118,12 +143,18 @@ For each location:
 
 The first successfully loaded library is used, and its resolved path is returned for logging and diagnostics.
 
-### Process-global loading
+### Public helpers
 
-For long-lived applications, `PdfiumLibrary::global_with_fallbacks()` caches the first successful native load for the lifetime of the process and returns a shared `&'static PdfiumLibrary` plus the resolved path.
+For long-lived applications, `PdfiumLibrary::global_with_fallbacks()` caches the first successful native load for the
+lifetime of the process and returns a shared `&'static PdfiumLibrary` plus the resolved path.
 
-This is useful for GUI backends and services because it avoids repeated native load/unload cycles. It stabilizes library lifetime, but it does **not** make Pdfium extraction automatically safe for concurrent use. If your application may run overlapping extraction jobs, serialize extraction at the app layer with a `Mutex` or similar guard.
+`detect_platform_folder()` is also re-exported for callers that need the crate's platform folder naming convention, such
+as `win-x64`, `linux-arm64`, or `macos-x64`.
 
+This is useful for GUI backends and services because it avoids repeated native load/unload cycles. It stabilizes library lifetime, but it does
+**not
+** make Pdfium extraction automatically safe for concurrent use. If your application may run overlapping extraction jobs, serialize extraction at the app layer with a
+`Mutex` or similar guard.
 ---
 
 ## Embedded PDFium support (optional)
@@ -135,7 +166,8 @@ When this feature is enabled:
 * A single platform-specific PDFium native library is embedded into the binary
 * The embedded native is compressed with zstd at build time
 * On first actual use, the library is decompressed and written to a cache directory
-* Subsequent runs try to load the cached extracted library first and only decompress again if the cache is missing or no longer loadable
+* Subsequent runs try to load the cached extracted library first and only decompress again if the cache is missing or no
+  longer loadable
 
 ### Enabling embedded mode
 
@@ -161,9 +193,9 @@ cargo build --release --features pdfium-embed
 ### Runtime behavior
 
 * On first use (or after a PDFium version change), the embedded native is extracted to:
-  * Windows: `%LOCALAPPDATA%/pdfium-helper/natives/`
-  * Linux: `$XDG_CACHE_HOME/pdfium-helper/natives/` or `~/.cache/pdfium-helper/natives/`
-  * macOS: `~/Library/Caches/pdfium-helper/natives/`
+    * Windows: `%LOCALAPPDATA%/pdfium-helper/natives/`
+    * Linux: `$XDG_CACHE_HOME/pdfium-helper/natives/` or `~/.cache/pdfium-helper/natives/`
+    * macOS: `~/Library/Caches/pdfium-helper/natives/`
 * The extracted filename is versioned, for example `pdfium-145.0.7616.0-win-x64.dll`
 * Existing cached files are reused when they are already present and loadable
 
@@ -178,27 +210,33 @@ Users may choose the mode that best fits their deployment model.
 
 ### Note on cross-compilation
 
-The `pdfium-embed` feature embeds a prebuilt Pdfium native library for the current target OS and architecture using `#[cfg(target_os, target_arch)]`.
+The `pdfium-embed` feature embeds a prebuilt Pdfium native library for the current target OS and architecture using
+`#[cfg(target_os, target_arch)]`.
 
-This feature is primarily intended for native builds, where the build machine architecture matches the target architecture.
+This feature is primarily intended for native builds, where the build machine architecture matches the target
+architecture.
 
-When cross-compiling, it is recommended to disable `pdfium-embed` and provide Pdfium externally instead. In such cases, `pdfium-helper` will load Pdfium dynamically using its fallback mechanisms.
+When cross-compiling, it is recommended to disable `pdfium-embed` and provide Pdfium externally instead. In such cases,
+`pdfium-helper` will load Pdfium dynamically using its fallback mechanisms.
 
 ---
 
 ## PDFium binaries (dynamic mode)
 
-If not using embedded mode, prebuilt PDFium native libraries can be obtained from the **pdfium-binaries** project:
-
-[https://github.com/bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries)
-
-You may supply either:
+If not using embedded mode, you may supply either:
 
 * A single native library placed next to the executable
 * A bundled `pdfium/` directory containing multiple platforms
 
-`pdfium-helper` will automatically detect and load the correct library at runtime.
+This repository's portable `opencc-rs` releases now also ship a root `VERSION` manifest for verified bundled-version
+reporting, but that manifest is optional for plain library loading.
 
+If you need to source Pdfium binaries yourself, prebuilt native libraries can be obtained from the **pdfium-binaries**
+project:
+
+[https://github.com/bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries)
+
+`pdfium-helper` will automatically detect and load the correct library at runtime.
 ---
 
 ## PDF text extraction
@@ -256,7 +294,8 @@ PDF text extraction often produces fragmented lines, especially for:
 * Japanese ebooks
 * Dialogue-heavy content
 
-The reflow helper merges broken lines, detects paragraph boundaries, preserves dialogue punctuation, and optionally inserts page headers or compacts whitespace.
+The reflow helper merges broken lines, detects paragraph boundaries, preserves dialogue punctuation, and optionally
+inserts page headers or compacts whitespace.
 
 ### What reflow does NOT do
 
@@ -331,3 +370,5 @@ This crate is intended for:
 * Developers studying CJK PDF text extraction and reflow
 
 It is not intended as a general-purpose PDF library.
+
+

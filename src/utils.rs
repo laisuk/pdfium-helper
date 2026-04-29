@@ -44,3 +44,15 @@ pub fn print_progress(page: i32, total: i32, text: &str) {
     print!("\r{}", line);
     let _ = io::stdout().flush();
 }
+
+pub fn print_done(total: i32) {
+    let msg = format!("Completed [{}/{}] (100%) ✓", total, total);
+
+    const WIDTH: usize = 70;
+    let mut line = msg;
+    if line.len() < WIDTH {
+        line.push_str(&" ".repeat(WIDTH - line.len()));
+    }
+
+    print!("\r{}\n", line);
+}

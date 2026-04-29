@@ -429,7 +429,8 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         pages.push(text.to_owned());
     })?;
 
-    println!(); // move to next line after progress
+    pdfium_helper::print_done(pages.len() as i32);
+    // println!(); // move to next line after progress
 
     let mut extracted = pages.concat();
 

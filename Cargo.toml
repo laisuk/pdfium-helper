@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/opencc-office-converter",
     "tools/opencc-rs",
     "tools/opencc-jieba"
 ]
@@ -55,5 +56,4 @@ panic = "abort"            # Prevents Rust panics from unwinding, reducing binar
 incremental = false        # Disable incremental builds to fully optimize the release binary
 strip = "symbols"          # Strips debug symbols while retaining export symbols needed for the C API
 debug = 0                  # No debug info in the final binary to reduce size
-
 

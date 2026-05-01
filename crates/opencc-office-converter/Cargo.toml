@@ -1,0 +1,10 @@
+[package]
+name = "opencc-office-converter"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75.0"
+publish = false
+
+[dependencies]
+regex = "1.12"
+zip = { version = "=3.0", default-features = false, features = ["deflate"] }

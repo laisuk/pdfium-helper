@@ -27,6 +27,7 @@ rustc-hash = "=2.1.1"
 opencc-fmmseg = "0.9"
 #pdfium-helper = {path="../..", features = ["pdfium-embed"]}
 pdfium-helper = { path = "../.." }
+opencc-office-converter = { path = "../../crates/opencc-office-converter" }
 
 [build-dependencies]
 winres = "0.1"

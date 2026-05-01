@@ -2,15 +2,13 @@ use clap::builder::{StringValueParser, TypedValueParser, ValueParser};
 use clap::{Arg, ArgMatches, Command};
 use encoding_rs::Encoding;
 use encoding_rs_io::DecodeReaderBytesBuilder;
-use opencc_jieba_rs::{OpenCC, OpenccConfig};
+use opencc_jieba_rs::{OpenCC, OpenccConfig as OpenccJiebaConfig};
+use opencc_office_converter::OfficeConverter;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, IsTerminal, Read, Write};
 use std::path::Path;
 use std::sync::OnceLock;
-
-mod office_converter;
-use office_converter::OfficeConverter;
 
 const BLUE: &str = "\x1B[1;34m";
 const RESET: &str = "\x1B[0m";
@@ -146,7 +144,7 @@ fn get_supported_configs() -> &'static str {
     static SUPPORTED: OnceLock<String> = OnceLock::new();
     SUPPORTED.get_or_init(|| {
         let mut s = String::with_capacity(128);
-        for (i, cfg) in OpenccConfig::ALL.iter().enumerate() {
+        for (i, cfg) in OpenccJiebaConfig::ALL.iter().enumerate() {
             if i > 0 {
                 s.push_str(" | ");
             }
@@ -158,8 +156,8 @@ fn get_supported_configs() -> &'static str {
 
 fn config_value_parser() -> ValueParser {
     ValueParser::new(StringValueParser::new().try_map(|s| {
-        OpenccConfig::try_from(s.as_str())
-            .map(OpenccConfig::as_str)
+        OpenccJiebaConfig::try_from(s.as_str())
+            .map(OpenccJiebaConfig::as_str)
             .map(str::to_owned)
             .map_err(|_| format!("\nSupported configs: {}", get_supported_configs()))
     }))
@@ -239,7 +237,7 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     }
 
     let input_str = decode_input(&buffer, in_enc)?;
-    let output_str= opencc.convert(&input_str, config, punctuation);
+    let output_str = opencc.convert(&input_str, config, punctuation);
 
     let (is_console_output, mut output) = open_output(output_file)?;
 
@@ -325,11 +323,14 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
         }
     };
 
+    let office_converter =
+        |text: &str, config: &str, punctuation: bool| helper.convert(text, config, punctuation);
+
     match OfficeConverter::convert(
         input_file,
         &final_output,
         &office_format,
-        &helper,
+        &office_converter,
         config,
         punctuation,
         keep_font,

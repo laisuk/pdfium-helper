@@ -1,11 +1,9 @@
-mod office_converter;
-use office_converter::OfficeConverter;
-
 use clap::builder::{StringValueParser, TypedValueParser, ValueParser};
 use clap::{Arg, ArgMatches, Command};
 use encoding_rs::Encoding;
 use encoding_rs_io::DecodeReaderBytesBuilder;
 use opencc_fmmseg::{OpenCC, OpenccConfig};
+use opencc_office_converter::OfficeConverter;
 use pdfium_helper::{
     detect_platform_folder, extract_pdf_pages_with_callback_pdfium, reflow_cjk_paragraphs,
     PdfiumExtractError, PdfiumLibrary,
@@ -294,11 +292,14 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
         }
     };
 
+    let office_converter =
+        |text: &str, config: &str, punctuation: bool| helper.convert(text, config, punctuation);
+
     match OfficeConverter::convert(
         input_file,
         &final_output,
         &office_format,
-        &helper,
+        &office_converter,
         config,
         punctuation,
         keep_font,

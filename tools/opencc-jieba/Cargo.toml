@@ -1,0 +1,20 @@
+[package]
+name = "opencc-jieba"
+version = "0.7.5"
+edition = "2021"
+
+[dependencies]
+opencc-jieba-rs = "0.7.5"
+clap = "=4.5"
+encoding_rs = "0.8"
+encoding_rs_io = "0.1"
+regex = "1.12"
+zip = { version = "=3.0", default-features = false, features = ["deflate"] }
+# Exact dependency pins to preserve MSRV (rustc 1.75.0):
+# clap_lex@1.0.1
+clap_lex = "=1.0"
+include-flate = "=0.3.0"
+# libflate 2.1.0 is pinned for Rust 1.75.0 compatibility.
+# Newer versions remove core2 but require newer Rust (>=1.81).
+libflate = "=2.1.0"
+

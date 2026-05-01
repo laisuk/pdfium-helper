@@ -612,6 +612,7 @@ fn find_pdfium_version_file(lib_path: &std::path::Path) -> Option<std::path::Pat
 
     None
 }
+
 /// Write UTF-8 text using Unix newlines (`\n`) on all platforms
 fn write_text_unix_newlines<P: AsRef<std::path::Path>>(path: P, s: &str) -> io::Result<()> {
     let normalized = s.replace("\r\n", "\n").replace('\r', "\n");

@@ -655,7 +655,9 @@ dependencies = [
  "libflate",
  "opencc-jieba-rs",
  "opencc-office-converter",
+ "pdfium-helper",
  "regex",
+ "sha2",
  "zip",
 ]
 

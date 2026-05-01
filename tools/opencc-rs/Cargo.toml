@@ -8,27 +8,23 @@ revision = 0
 
 [dependencies]
 clap = "=4.5"
-encoding_rs = "0.8"
-encoding_rs_io = "0.1"
 regex = "1.12"
-sha2 = "=0.10.9"
 # Keep zip MSRV-safe for 1.75 (3.x, not 4.x):
 zip = { version = "=3.0", default-features = false, features = ["deflate"] }
 # Exact dependency pins to preserve MSRV (rustc 1.75.0):
 # clap_lex@1.0.1, rustc-hash@2.1.1
 clap_lex = "=1.0"
 rustc-hash = "=2.1.1"
-#indexmap = "=2.11.4"
+
 #crc = "=3.3.0"
 #time = "=0.3.41"
 #time-core = "=0.1.4"
 
 #opencc-fmmseg = { git = "https://github.com/laisuk/opencc-fmmseg.git", branch = "master" }
 opencc-fmmseg = "0.9"
-#pdfium-helper = {path="../..", features = ["pdfium-embed"]}
-pdfium-helper = { path = "../.." }
-opencc-office-converter = { path = "../../crates/opencc-office-converter" }
+opencc-utils = { path = "../../crates/opencc-utils" }
 
 [build-dependencies]
 winres = "0.1"
 toml = "=0.8"
+#indexmap = "=2.11.4"

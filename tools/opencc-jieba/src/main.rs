@@ -1,18 +1,13 @@
 use clap::builder::{StringValueParser, TypedValueParser, ValueParser};
 use clap::{Arg, ArgMatches, Command};
-use encoding_rs::Encoding;
-use encoding_rs_io::DecodeReaderBytesBuilder;
 use opencc_jieba_rs::{OpenCC, OpenccConfig as OpenccJiebaConfig};
-use opencc_office_converter::OfficeConverter;
-use pdfium_helper::{
-    detect_platform_folder, extract_pdf_pages_with_callback_pdfium, reflow_cjk_paragraphs,
-    PdfiumExtractError, PdfiumLibrary,
+use opencc_utils::{
+    convert_office_document, decode_input, encode_and_write_output, exit_on_error,
+    handle_pdf_with_converter, normalize_line_endings, open_output, remove_utf8_bom,
+    should_remove_bom, PdfOptions,
 };
-use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter, IsTerminal, Read, Write};
-use std::path::Path;
+use std::io::{self, BufRead, BufReader, IsTerminal, Read};
 use std::sync::OnceLock;
 
 const BLUE: &str = "\x1B[1;34m";
@@ -45,6 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     BLUE, RESET
                 ))
                 .args(common_args())
+                .mut_arg("config", |a| a.required(true))
                 .args(enc_args()),
         )
         .subcommand(
@@ -54,6 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     BLUE, RESET
                 ))
                 .args(common_args())
+                .mut_arg("config", |a| a.required(true))
                 .arg(
                     Arg::new("format")
                         .short('f')
@@ -186,14 +183,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ => unreachable!("Clap ensures only valid subcommands are passed"),
     };
 
-    if let Err(e) = result {
-        if let Some(pe) = e.downcast_ref::<PdfiumExtractError>() {
-            eprintln!("{}", pe.pretty());
-        } else {
-            eprintln!("Error: {e}");
-        }
-        std::process::exit(1);
-    }
+    exit_on_error(result);
 
     Ok(())
 }
@@ -236,7 +226,6 @@ fn common_args() -> Vec<Arg> {
         Arg::new("config")
             .short('c')
             .long("config")
-            .required(true)
             .value_name("config")
             .value_parser(config_value_parser())
             .help(format!(
@@ -312,9 +301,6 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
 }
 
 fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-    let office_extensions: HashSet<&'static str> =
-        ["docx", "xlsx", "pptx", "odt", "ods", "odp", "epub"].into();
-
     let input_file = matches
         .get_one::<String>("input")
         .ok_or("❌  Input file is required for office mode")?;
@@ -326,83 +312,17 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
     let auto_ext = matches.get_flag("auto_ext");
     let format = matches.get_one::<String>("format").map(String::as_str);
 
-    let office_format = match format {
-        Some(f) => f.to_lowercase(),
-        None => {
-            if auto_ext {
-                let ext = Path::new(input_file)
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .ok_or("❌  Cannot infer file extension")?;
-                if office_extensions.contains(ext) {
-                    ext.to_string()
-                } else {
-                    return Err(format!("❌  Unsupported Office extension: .{ext}").into());
-                }
-            } else {
-                return Err("❌  Please provide --format or use --auto-ext".into());
-            }
-        }
-    };
-
     let helper = OpenCC::new();
-
-    let final_output = match output_file {
-        Some(path) => {
-            if auto_ext
-                && Path::new(path).extension().is_none()
-                && office_extensions.contains(office_format.as_str())
-            {
-                format!("{path}.{}", office_format)
-            } else {
-                path.to_string()
-            }
-        }
-        None => {
-            let input_path = Path::new(input_file);
-            let file_stem = input_path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("converted");
-            let ext = office_format.as_str();
-            let parent = input_path.parent().unwrap_or_else(|| ".".as_ref());
-
-            let file_stem_converted = helper.convert(file_stem, config, punctuation);
-            let final_stem = if auto_ext {
-                format!("{file_stem_converted}_converted")
-            } else {
-                format!("{file_stem}_converted")
-            };
-
-            parent
-                .join(format!("{final_stem}.{ext}"))
-                .to_string_lossy()
-                .to_string()
-        }
-    };
-
-    let office_converter =
-        |text: &str, config: &str, punctuation: bool| helper.convert(text, config, punctuation);
-
-    match OfficeConverter::convert(
+    convert_office_document(
         input_file,
-        &final_output,
-        &office_format,
-        &office_converter,
+        output_file,
+        format,
+        auto_ext,
+        keep_font,
         config,
         punctuation,
-        keep_font,
-    ) {
-        Ok(result) if result.success => {
-            eprintln!("{}\n📁  Output saved to: {}", result.message, final_output);
-        }
-        Ok(result) => {
-            eprintln!("❌  Office document conversion failed: {}", result.message);
-        }
-        Err(e) => {
-            eprintln!("❌  Error: {}", e);
-        }
-    }
+        |text, config, punctuation| helper.convert(text, config, punctuation),
+    )?;
 
     Ok(())
 }
@@ -500,88 +420,6 @@ fn read_input(input: &mut dyn Read, is_console: bool) -> io::Result<Vec<u8>> {
     }
 }
 
-fn decode_input(buffer: &[u8], enc: &str) -> io::Result<String> {
-    if enc.eq_ignore_ascii_case("UTF-8") {
-        return Ok(String::from_utf8_lossy(buffer).into_owned());
-    }
-
-    let encoding = Encoding::for_label(enc.as_bytes()).ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("Unsupported encoding: {enc}"),
-        )
-    })?;
-
-    let mut reader = DecodeReaderBytesBuilder::new()
-        .encoding(Some(encoding))
-        .build(buffer);
-
-    let mut decoded = String::new();
-    reader.read_to_string(&mut decoded)?;
-    Ok(decoded)
-}
-
-fn open_output(output_file: Option<&String>) -> io::Result<(bool, Box<dyn Write>)> {
-    let is_console_output = output_file.is_none();
-
-    let output: Box<dyn Write> = match output_file {
-        Some(file_name) => Box::new(BufWriter::new(File::create(file_name)?)),
-        None => Box::new(BufWriter::new(io::stdout().lock())),
-    };
-
-    Ok((is_console_output, output))
-}
-
-fn encode_and_write_output(output_str: &str, enc: &str, output: &mut dyn Write) -> io::Result<()> {
-    if enc.eq_ignore_ascii_case("UTF-8") {
-        output.write_all(output_str.as_bytes())?;
-        return Ok(());
-    }
-
-    let encoding = Encoding::for_label(enc.as_bytes()).ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("Unsupported output encoding: {enc}"),
-        )
-    })?;
-
-    let (encoded, _, _) = encoding.encode(output_str);
-    output.write_all(&encoded)?;
-    Ok(())
-}
-
-fn should_remove_bom(in_enc: &str, out_enc: &str) -> bool {
-    in_enc.eq_ignore_ascii_case("UTF-8") && !out_enc.eq_ignore_ascii_case("UTF-8")
-}
-
-fn remove_utf8_bom(input: &mut Vec<u8>) {
-    if input.starts_with(&[0xEF, 0xBB, 0xBF]) {
-        input.drain(..3);
-    }
-}
-
-fn normalize_line_endings(s: &str) -> String {
-    if !s.contains('\r') {
-        return s.to_string(); // fast path
-    }
-
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-
-    while let Some(c) = chars.next() {
-        if c == '\r' {
-            if matches!(chars.peek(), Some('\n')) {
-                chars.next();
-            }
-            out.push('\n');
-        } else {
-            out.push(c);
-        }
-    }
-
-    out
-}
-
 fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let input_file = matches
         .get_one::<String>("input")
@@ -605,264 +443,20 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         )
     };
 
-    // ---- normalize input path (Windows friendly) ----
-    let input_norm: String = if cfg!(windows) {
-        input_file.replace(['/', '\\'], &std::path::MAIN_SEPARATOR.to_string())
-    } else {
-        input_file.clone()
-    };
-
-    let input_path = std::path::Path::new(&input_norm);
-
-    // ---- default output: <input_stem>_extracted.txt OR _converted.txt ----
-    let final_output: std::path::PathBuf = match output_file {
-        Some(p) => std::path::PathBuf::from(p),
-        None => {
-            let parent = input_path
-                .parent()
-                .unwrap_or_else(|| std::path::Path::new("."));
-            let stem = input_path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("input");
-
-            let suffix = if extract_only {
-                "_extracted.txt"
-            } else {
-                "_converted.txt"
-            };
-            parent.join(format!("{stem}{suffix}"))
-        }
-    };
-
-    if extract_only {
-        println!("Extracting PDF page-by-page with PDFium (extract-only): {input_norm}");
-    } else {
-        println!("Extracting PDF page-by-page with PDFium: {input_norm}");
-    }
-
-    // Load Pdfium native:
-    // 1) try custom --pdfium dir first
-    // 2) if invalid / load fails, warn and fall back to default lookup
-    let pdfium = if let Some(dir) = pdfium_dir {
-        let base = std::path::Path::new(dir);
-
-        match PdfiumLibrary::load_from_base_dir_flexible(base) {
-            Ok((pdfium, lib_path)) => {
-                print_loaded_pdfium(&lib_path, false);
-                pdfium
-            }
-            Err(e) => {
-                eprintln!(
-                    "Warning: failed to load Pdfium from {}: {}",
-                    base.display(),
-                    e
-                );
-
-                let (pdfium, lib_path) = PdfiumLibrary::load_with_fallbacks()?;
-                print_loaded_pdfium(&lib_path, true);
-                pdfium
-            }
-        }
-    } else {
-        let (pdfium, lib_path) = PdfiumLibrary::load_with_fallbacks()?;
-        print_loaded_pdfium(&lib_path, true);
-        pdfium
-    };
-
-    let mut pages: Vec<String> = Vec::new();
-
-    // Page-by-page extraction with progress
-    extract_pdf_pages_with_callback_pdfium(&pdfium, &input_norm, header, |page, total, text| {
-        pdfium_helper::print_progress(page, total, text);
-        pages.push(text.to_owned());
-    })?;
-
-    pdfium_helper::print_done(pages.len() as i32);
-    // println!(); // move to next line after progress
-
-    let mut extracted = pages.concat();
-
-    println!(
-        "Total extracted characters: {}",
-        pdfium_helper::format_thousand(extracted.chars().count())
-    );
-
-    // Optional reflow (still valid for extract-only)
-    if reflow {
-        println!("Reflowing CJK paragraphs...");
-        extracted = reflow_cjk_paragraphs(
-            &extracted, header,  // add_pdf_page_header
-            compact, // compact
-        );
-    }
-
-    // ---- extract-only path: write extracted and exit ----
-    if extract_only {
-        write_text_unix_newlines(&final_output, &extracted)?;
-        eprintln!(
-            "✅  PDF extracted.\n📁  Output saved to: {}",
-            final_output.display()
-        );
-        return Ok(());
-    }
-
-    // ---- conversion path ----
-    let Some(config) = config else {
-        unreachable!("--config is required unless --extract is used");
-    };
-
-    println!(
-        "Converting with Opencc-Fmmseg (config={}, punct={}) ...",
-        config, punctuation
-    );
-
     let helper = OpenCC::new();
-    let converted = helper.convert(&extracted, config, punctuation);
-
-    write_text_unix_newlines(&final_output, &converted)?;
-
-    eprintln!(
-        "✅  PDF converted.\n📁  Output saved to: {}",
-        final_output.display()
-    );
-    Ok(())
-}
-
-fn print_loaded_pdfium(path: &std::path::Path, include_version: bool) {
-    let display_path = path.display().to_string().replace('\\', "/");
-    if include_version {
-        match read_pdfium_version(path) {
-            Some(version) => println!("Loaded pdfium: {} (version: {})", display_path, version),
-            None => println!("Loaded pdfium: {}", display_path),
-        }
-    } else {
-        println!("Loaded pdfium: {}", display_path);
-    }
-}
-fn read_pdfium_version(lib_path: &std::path::Path) -> Option<String> {
-    let version_path = find_pdfium_version_file(lib_path)?;
-    let manifest_dir = version_path.parent()?;
-    let relative_path = lib_path
-        .strip_prefix(manifest_dir)
-        .ok()?
-        .display()
-        .to_string()
-        .replace('\\', "/");
-
-    let (version, hashes) = read_pdfium_manifest(&version_path)?;
-    let expected_hash = manifest_hash_candidates(&relative_path, lib_path)
-        .into_iter()
-        .find_map(|candidate| hashes.get(&candidate).cloned())?;
-    let actual_hash = compute_sha256_hex(lib_path)?;
-    if !actual_hash.eq_ignore_ascii_case(&expected_hash) {
-        return None;
-    }
-
-    Some(version)
-}
-
-fn read_pdfium_manifest(
-    version_path: &std::path::Path,
-) -> Option<(String, HashMap<String, String>)> {
-    let contents = std::fs::read_to_string(version_path).ok()?;
-    let mut version = None;
-    let mut hashes = HashMap::new();
-
-    for line in contents.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-
-        let (key, value) = line.split_once('=')?;
-        let key = key.trim();
-        let value = value.trim();
-        if key.is_empty() || value.is_empty() {
-            continue;
-        }
-
-        if key == "version" {
-            version = Some(value.to_owned());
-            continue;
-        }
-
-        let hash = value.strip_prefix("SHA256:")?.trim();
-        if hash.is_empty() {
-            continue;
-        }
-
-        hashes.insert(key.replace('\\', "/"), hash.to_owned());
-    }
-
-    Some((version?, hashes))
-}
-
-fn manifest_hash_candidates(lib_relative_path: &str, lib_path: &std::path::Path) -> Vec<String> {
-    let mut candidates = Vec::new();
-    push_unique_candidate(&mut candidates, lib_relative_path.to_owned());
-
-    let file_name = lib_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(|name| name.replace('\\', "/"));
-
-    if let Some(file_name) = file_name {
-        push_unique_candidate(&mut candidates, file_name.clone());
-
-        if let Ok(platform) = detect_platform_folder() {
-            push_unique_candidate(&mut candidates, format!("pdfium/{platform}/{file_name}"));
-            push_unique_candidate(&mut candidates, format!("{platform}/{file_name}"));
-        }
-    }
-
-    candidates
-}
-
-fn push_unique_candidate(candidates: &mut Vec<String>, candidate: String) {
-    if !candidates.iter().any(|existing| existing == &candidate) {
-        candidates.push(candidate);
-    }
-}
-
-fn compute_sha256_hex(path: &std::path::Path) -> Option<String> {
-    let mut file = File::open(path).ok()?;
-    let mut hasher = Sha256::new();
-    let mut buffer = [0_u8; 8192];
-
-    loop {
-        let read = file.read(&mut buffer).ok()?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-
-    Some(format!("{:X}", hasher.finalize()))
-}
-
-fn find_pdfium_version_file(lib_path: &std::path::Path) -> Option<std::path::PathBuf> {
-    let ancestors: Vec<_> = lib_path.ancestors().collect();
-
-    for ancestor in ancestors.iter().rev() {
-        let candidate = ancestor.join("VERSION");
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-
-    for ancestor in ancestors.iter().rev() {
-        let candidate = ancestor.join("pdfium").join("VERSION");
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-
-    None
-}
-
-/// Write UTF-8 text using Unix newlines (`\n`) on all platforms
-fn write_text_unix_newlines<P: AsRef<std::path::Path>>(path: P, s: &str) -> io::Result<()> {
-    let normalized = s.replace("\r\n", "\n").replace('\r', "\n");
-    std::fs::write(path, normalized.as_bytes())
+    handle_pdf_with_converter(
+        PdfOptions {
+            input_file,
+            output_file,
+            config,
+            punctuation,
+            reflow,
+            compact,
+            header,
+            extract_only,
+            pdfium_dir,
+            converter_name: "Opencc-Jieba",
+        },
+        |text, config, punctuation| helper.convert(text, config, punctuation),
+    )
 }

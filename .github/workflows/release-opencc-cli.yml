@@ -1,4 +1,4 @@
-name: release-opencc-rs
+name: release-opencc-cli
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
             archive_ext: tar.gz
             rust_toolchain: stable
             is_win7: false
-            cargo_cmd: cargo build --release -p opencc-rs
+            cargo_cmd: cargo build --release -p opencc-rs -p opencc-jieba
             target_release_dir: target/release
             pdfium_subdir: linux-x64
             pdfium_lib: libpdfium.so
@@ -39,7 +39,7 @@ jobs:
             archive_ext: tar.gz
             rust_toolchain: stable
             is_win7: false
-            cargo_cmd: cargo build --release -p opencc-rs
+            cargo_cmd: cargo build --release -p opencc-rs -p opencc-jieba
             target_release_dir: target/release
             pdfium_subdir: linux-arm64
             pdfium_lib: libpdfium.so
@@ -53,7 +53,7 @@ jobs:
             archive_ext: tar.gz
             rust_toolchain: stable
             is_win7: false
-            cargo_cmd: cargo build --release -p opencc-rs
+            cargo_cmd: cargo build --release -p opencc-rs -p opencc-jieba
             target_release_dir: target/release
             pdfium_subdir: macos-arm64
             pdfium_lib: libpdfium.dylib
@@ -66,7 +66,7 @@ jobs:
             archive_ext: tar.gz
             rust_toolchain: stable
             is_win7: false
-            cargo_cmd: cargo build --release -p opencc-rs
+            cargo_cmd: cargo build --release -p opencc-rs -p opencc-jieba
             target_release_dir: target/release
             pdfium_subdir: macos-x64
             pdfium_lib: libpdfium.dylib
@@ -79,7 +79,7 @@ jobs:
             archive_ext: zip
             rust_toolchain: stable
             is_win7: false
-            cargo_cmd: cargo build --release -p opencc-rs
+            cargo_cmd: cargo build --release -p opencc-rs -p opencc-jieba
             target_release_dir: target/release
             pdfium_subdir: win-x64
             pdfium_lib: pdfium.dll
@@ -92,7 +92,7 @@ jobs:
             archive_ext: zip
             rust_toolchain: stable
             is_win7: false
-            cargo_cmd: cargo build --release -p opencc-rs
+            cargo_cmd: cargo build --release -p opencc-rs -p opencc-jieba
             target_release_dir: target/release
             pdfium_subdir: win-arm64
             pdfium_lib: pdfium.dll
@@ -105,7 +105,7 @@ jobs:
             archive_ext: zip
             rust_toolchain: nightly
             is_win7: true
-            cargo_cmd: cargo +nightly build -Z build-std=std,panic_abort --target x86_64-win7-windows-msvc --release -p opencc-rs
+            cargo_cmd: cargo +nightly build -Z build-std=std,panic_abort --target x86_64-win7-windows-msvc --release -p opencc-rs -p opencc-jieba
             target_release_dir: target/x86_64-win7-windows-msvc/release
             pdfium_subdir: win-x64
             pdfium_lib: pdfium.dll
@@ -118,7 +118,7 @@ jobs:
             archive_ext: zip
             rust_toolchain: nightly
             is_win7: true
-            cargo_cmd: cargo +nightly build -Z build-std=std,panic_abort --target i686-win7-windows-msvc --release -p opencc-rs
+            cargo_cmd: cargo +nightly build -Z build-std=std,panic_abort --target i686-win7-windows-msvc --release -p opencc-rs -p opencc-jieba
             target_release_dir: target/i686-win7-windows-msvc/release
             pdfium_subdir: win-x86
             pdfium_lib: pdfium.dll
@@ -204,8 +204,10 @@ jobs:
 
               ${{ matrix.cargo_cmd }}
 
-              readelf -sW ${{ matrix.target_release_dir }}/opencc-rs${{ matrix.bin_ext }} \
-                | grep -o "GLIBC_[0-9.]*" | sort -V | tail -n 1
+              for tool in opencc-rs opencc-jieba; do
+                readelf -sW "${{ matrix.target_release_dir }}/${tool}${{ matrix.bin_ext }}" \
+                  | grep -o "GLIBC_[0-9.]*" | sort -V | tail -n 1
+              done
             '
 
           sudo chown -R "$(id -u)":"$(id -g)" target || true
@@ -215,13 +217,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          exe="${{ matrix.target_release_dir }}/opencc-rs${{ matrix.bin_ext }}"
-          max_ver="$(readelf -sW "$exe" | grep -o 'GLIBC_[0-9.]*' | sort -V | tail -n 1)"
-          echo "Max GLIBC requirement: $max_ver"
-          if [[ "$(printf '%s\n' "GLIBC_2.17" "$max_ver" | sort -V | tail -n 1)" != "GLIBC_2.17" ]]; then
-            echo "Too new: $max_ver (need <= GLIBC_2.17)"
-            exit 1
-          fi
+          for tool in opencc-rs opencc-jieba; do
+            exe="${{ matrix.target_release_dir }}/${tool}${{ matrix.bin_ext }}"
+            max_ver="$(readelf -sW "$exe" | grep -o 'GLIBC_[0-9.]*' | sort -V | tail -n 1)"
+            echo "${tool} max GLIBC requirement: $max_ver"
+            if [[ "$(printf '%s\n' "GLIBC_2.17" "$max_ver" | sort -V | tail -n 1)" != "GLIBC_2.17" ]]; then
+              echo "${tool} too new: $max_ver (need <= GLIBC_2.17)"
+              exit 1
+            fi
+          done
           echo "manylinux2014-compatible"
 
       - name: Build Project
@@ -241,13 +245,16 @@ jobs:
         shell: powershell
         run: |
           $outDir = "${{ matrix.target_release_dir }}"
-          $exe = Join-Path $outDir ("opencc-rs${{ matrix.bin_ext }}")
-          if (!(Test-Path $exe)) { throw "Missing Win7 exe: $exe" }
+          foreach ($tool in @("opencc-rs", "opencc-jieba")) {
+            $exe = Join-Path $outDir ("$tool${{ matrix.bin_ext }}")
+            if (!(Test-Path $exe)) { throw "Missing Win7 exe: $exe" }
 
-          $out = & dumpbin /headers $exe | Select-String -Pattern "subsystem version"
-          $text = ($out | ForEach-Object { $_.ToString() }) -join "`n"
-          Write-Host $text
-          if ($text -notmatch "6\.01") { throw "Subsystem is not 6.01: $exe" }
+            $out = & dumpbin /headers $exe | Select-String -Pattern "subsystem version"
+            $text = ($out | ForEach-Object { $_.ToString() }) -join "`n"
+            Write-Host "$tool subsystem:"
+            Write-Host $text
+            if ($text -notmatch "6\.01") { throw "Subsystem is not 6.01: $exe" }
+          }
 
       - name: Prepare Release Folder
         shell: bash
@@ -256,32 +263,40 @@ jobs:
           mkdir -p dist
 
           OUT_DIR="${{ matrix.target_release_dir }}"
-          ARTIFACT_DIR="dist/opencc-rs-${{ github.ref_name }}-${{ matrix.name }}"
-          mkdir -p "$ARTIFACT_DIR"
+          for tool in opencc-rs opencc-jieba; do
+            ARTIFACT_DIR="dist/${tool}-${{ github.ref_name }}-${{ matrix.name }}"
+            mkdir -p "$ARTIFACT_DIR"
 
-          cp "${OUT_DIR}/opencc-rs${{ matrix.bin_ext }}" "$ARTIFACT_DIR/"
-          cp "tools/opencc-rs/README.md" "$ARTIFACT_DIR/README.md"
-          cp "VERSION" "$ARTIFACT_DIR/VERSION"
+            cp "${OUT_DIR}/${tool}${{ matrix.bin_ext }}" "$ARTIFACT_DIR/"
+            if [ -f "tools/${tool}/README.md" ]; then
+              cp "tools/${tool}/README.md" "$ARTIFACT_DIR/README.md"
+            fi
+            cp "VERSION" "$ARTIFACT_DIR/VERSION"
 
-          # Package the matching shipped pdfium binary for each target.
-          cp "pdfium/${{ matrix.pdfium_subdir }}/${{ matrix.pdfium_lib }}" "$ARTIFACT_DIR/${{ matrix.pdfium_lib }}"
+            # Package the matching shipped pdfium binary for each target.
+            cp "pdfium/${{ matrix.pdfium_subdir }}/${{ matrix.pdfium_lib }}" "$ARTIFACT_DIR/${{ matrix.pdfium_lib }}"
+          done
 
       - name: Package Release Artifact
         shell: bash
         run: |
           set -euo pipefail
-          ARTIFACT_NAME="opencc-rs-${{ github.ref_name }}-${{ matrix.name }}"
-          if [ "${{ matrix.archive_ext }}" = "tar.gz" ]; then
-            tar -czf "${ARTIFACT_NAME}.tar.gz" -C "dist/${ARTIFACT_NAME}" .
-          else
-            7z a "${ARTIFACT_NAME}.zip" ./dist/${ARTIFACT_NAME}/*
-          fi
+          for tool in opencc-rs opencc-jieba; do
+            ARTIFACT_NAME="${tool}-${{ github.ref_name }}-${{ matrix.name }}"
+            if [ "${{ matrix.archive_ext }}" = "tar.gz" ]; then
+              tar -czf "${ARTIFACT_NAME}.tar.gz" -C "dist/${ARTIFACT_NAME}" .
+            else
+              7z a "${ARTIFACT_NAME}.zip" ./dist/${ARTIFACT_NAME}/*
+            fi
+          done
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: opencc-rs-${{ github.ref_name }}-${{ matrix.name }}
-          path: opencc-rs-${{ github.ref_name }}-${{ matrix.name }}.${{ matrix.archive_ext }}
+          name: opencc-clis-${{ github.ref_name }}-${{ matrix.name }}
+          path: |
+            opencc-rs-${{ github.ref_name }}-${{ matrix.name }}.${{ matrix.archive_ext }}
+            opencc-jieba-${{ github.ref_name }}-${{ matrix.name }}.${{ matrix.archive_ext }}
 
   release:
     name: Release Artifacts
@@ -303,10 +318,10 @@ jobs:
 
           if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta[0-9]+$ ]]; then
             echo "is_beta=true" >> "$GITHUB_OUTPUT"
-            echo "release_name=opencc-rs ${TAG} (Beta)" >> "$GITHUB_OUTPUT"
+            echo "release_name=opencc-cli ${TAG} (Beta)" >> "$GITHUB_OUTPUT"
           else
             echo "is_beta=false" >> "$GITHUB_OUTPUT"
-            echo "release_name=opencc-rs ${TAG}" >> "$GITHUB_OUTPUT"
+            echo "release_name=opencc-cli ${TAG}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Publish GitHub Release

@@ -1,6 +1,6 @@
 use clap::builder::{StringValueParser, TypedValueParser, ValueParser};
 use clap::{Arg, ArgMatches, Command};
-use opencc_jieba_rs::{OpenCC, OpenccConfig as OpenccJiebaConfig};
+use opencc_jieba_rs::{OpenCC as OpenccJieba, OpenccConfig as OpenccJiebaConfig};
 use opencc_utils::{
     convert_office_document, decode_input, encode_and_write_output, exit_on_error,
     handle_pdf_with_converter, normalize_line_endings, open_output, remove_utf8_bom,
@@ -265,7 +265,7 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     let out_enc = matches.get_one::<String>("out_enc").unwrap();
     let punctuation = matches.get_flag("punct");
 
-    let opencc = OpenCC::new();
+    let opencc = OpenccJieba::new();
 
     let is_console = input_file.is_none();
     let mut input: Box<dyn Read> = match input_file {
@@ -312,7 +312,7 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
     let auto_ext = matches.get_flag("auto_ext");
     let format = matches.get_one::<String>("format").map(String::as_str);
 
-    let helper = OpenCC::new();
+    let helper = OpenccJieba::new();
     convert_office_document(
         input_file,
         output_file,
@@ -337,7 +337,7 @@ fn handle_segment(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     let out_enc = matches.get_one::<String>("out_enc").unwrap();
     let hmm = !matches.get_flag("no_hmm");
 
-    let opencc = OpenCC::new();
+    let opencc = OpenccJieba::new();
 
     let is_console = input_file.is_none();
     let mut input: Box<dyn Read> = match input_file {
@@ -443,7 +443,7 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         )
     };
 
-    let helper = OpenCC::new();
+    let helper = OpenccJieba::new();
     handle_pdf_with_converter(
         PdfOptions {
             input_file,

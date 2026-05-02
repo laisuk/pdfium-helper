@@ -653,10 +653,8 @@ dependencies = [
  "libflate",
  "opencc-jieba-rs",
  "opencc-utils",
- "regex",
  "toml 0.8.23",
  "winres",
- "zip",
 ]
 
 [[package]]
@@ -691,11 +689,9 @@ dependencies = [
  "clap_lex",
  "opencc-fmmseg",
  "opencc-utils",
- "regex",
  "rustc-hash",
  "toml 0.8.23",
  "winres",
- "zip",
 ]
 
 [[package]]

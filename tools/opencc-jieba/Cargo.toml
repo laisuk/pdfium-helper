@@ -9,8 +9,6 @@ revision = 0
 [dependencies]
 opencc-jieba-rs = "0.7.5"
 clap = "=4.5"
-regex = "1.12"
-zip = { version = "=3.0", default-features = false, features = ["deflate"] }
 opencc-utils = { path = "../../crates/opencc-utils" }
 
 # Exact dependency pins to preserve MSRV (rustc 1.75.0):

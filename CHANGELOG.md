@@ -6,11 +6,15 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.1.3-beta1] - 2026-05-02
+## [0.1.3] - 2026-05-02
 
 ### Added
 
 - Added CLI tool `opencc-jieba`
+
+### Changed
+
+- Update release workflow for `opencc-rs` v0.9.2 and `opencc-jieba` v0.7.5
 
 ---
 

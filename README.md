@@ -157,6 +157,7 @@ This is useful for GUI backends and services because it avoids repeated native l
 lifetime, but it does **not** make Pdfium extraction automatically safe for concurrent use.   
 If your application may run overlapping extraction jobs, serialize extraction at the app layer with a `Mutex` or similar
 guard.
+
 ---
 
 ## Embedded PDFium support (optional)

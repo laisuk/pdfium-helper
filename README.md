@@ -240,6 +240,7 @@ project:
 [https://github.com/bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries)
 
 `pdfium-helper` will automatically detect and load the correct library at runtime.
+
 ---
 
 ## PDF text extraction

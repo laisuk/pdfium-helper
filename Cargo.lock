@@ -645,7 +645,7 @@ dependencies = [
 
 [[package]]
 name = "opencc-jieba"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "clap",
  "clap_lex",
@@ -659,9 +659,9 @@ dependencies = [
 
 [[package]]
 name = "opencc-jieba-rs"
-version = "0.7.5"
+version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1fc1e7585809b7c6292ef55fbf9c4c9fcc5333d26bfbedd0b93585425472150"
+checksum = "2686f7ef4095fa4644dd6c443b0dd0fa6b59d1bf2e831b54c79b0dc452f39cb4"
 dependencies = [
  "include-flate",
  "jieba-rs",

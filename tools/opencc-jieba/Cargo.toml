@@ -1,13 +1,13 @@
 [package]
 name = "opencc-jieba"
-version = "0.7.5"
+version = "0.7.6"
 edition = "2021"
 
 [package.metadata.capi]
 revision = 0
 
 [dependencies]
-opencc-jieba-rs = "0.7.5"
+opencc-jieba-rs = "0.7.6"
 clap = "=4.5"
 opencc-utils = { path = "../../crates/opencc-utils" }
 

@@ -102,7 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .value_name("character")
                         .help("Delimiter character for segmented text (use \" \" for space)")
                         .required(false)
-                        .default_value("/"),
+                        .default_value(" "),
                 )
                 .arg(
                     Arg::new("separator")

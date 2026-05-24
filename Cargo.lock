@@ -630,9 +630,9 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencc-fmmseg"
-version = "0.9.2"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "349666f5c2afd22d760463b20fc276306eaa5fbf25ce4b697602b8afead01545"
+checksum = "4817428b431575d9bed36e72cdbe753003f24a6c71a046a0631b105803f78023"
 dependencies = [
  "rayon",
  "rayon-core",
@@ -683,7 +683,7 @@ dependencies = [
 
 [[package]]
 name = "opencc-rs"
-version = "0.9.2"
+version = "0.10.0"
 dependencies = [
  "clap",
  "clap_lex",
@@ -716,7 +716,7 @@ dependencies = [
 
 [[package]]
 name = "pdfium-helper"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "libloading",

@@ -278,7 +278,7 @@ where
         .ok_or("❌  --config is required unless --extract is used")?;
 
     println!(
-        "Converting with {} (config={}, punct={}) ...",
+        "Converting with {} (config: {}, punct: {}) ...",
         options.converter_name, config, options.punctuation
     );
 

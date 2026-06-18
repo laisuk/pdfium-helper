@@ -119,8 +119,8 @@ pub fn convert_office_document<F>(
     input_file: &str,
     output_file: Option<&String>,
     format: Option<&str>,
-    auto_ext: bool,
     keep_font: bool,
+    convert_filename: bool,
     config: &str,
     punctuation: bool,
     convert_text: F,
@@ -131,34 +131,33 @@ where
     let office_extensions: HashSet<&'static str> =
         ["docx", "xlsx", "pptx", "odt", "ods", "odp", "epub"].into();
 
-    let office_format = match format {
-        Some(f) => f.to_lowercase(),
-        None => {
-            if auto_ext {
-                let ext = Path::new(input_file)
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .ok_or("❌  Cannot infer file extension")?;
-                if office_extensions.contains(ext) {
-                    ext.to_string()
-                } else {
-                    return Err(format!("❌  Unsupported Office extension: .{ext}").into());
-                }
-            } else {
-                return Err("❌  Please provide --format or use --auto-ext".into());
-            }
+    let office_format = if let Some(f) = format {
+        f.to_lowercase()
+    } else {
+        let ext = Path::new(input_file)
+            .extension()
+            .and_then(|e| e.to_str())
+            .ok_or("❌  Cannot infer file extension. Please provide --format.")?
+            .to_lowercase();
+
+        if office_extensions.contains(ext.as_str()) {
+            ext
+        } else {
+            return Err(format!(
+                "❌  Unsupported Office extension: .{ext}. Please provide --format."
+            )
+            .into());
         }
     };
 
     let final_output = match output_file {
         Some(path) => {
-            if auto_ext
-                && Path::new(path).extension().is_none()
-                && office_extensions.contains(office_format.as_str())
-            {
+            let output_path = Path::new(path);
+
+            if output_path.extension().is_none() {
                 format!("{path}.{}", office_format)
             } else {
-                path.to_string()
+                path.clone()
             }
         }
         None => {
@@ -167,18 +166,17 @@ where
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("converted");
-            let ext = office_format.as_str();
-            let parent = input_path.parent().unwrap_or_else(|| ".".as_ref());
 
-            let file_stem_converted = convert_text(file_stem, config, punctuation);
-            let final_stem = if auto_ext {
+            let parent = input_path.parent().unwrap_or_else(|| ".".as_ref());
+            let final_stem = if convert_filename {
+                let file_stem_converted = convert_text(file_stem, config, punctuation);
                 format!("{file_stem_converted}_converted")
             } else {
                 format!("{file_stem}_converted")
             };
 
             parent
-                .join(format!("{final_stem}.{ext}"))
+                .join(format!("{final_stem}.{office_format}"))
                 .to_string_lossy()
                 .to_string()
         }

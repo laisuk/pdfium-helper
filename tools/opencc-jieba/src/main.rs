@@ -67,10 +67,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .help("Preserve original font styles"),
                 )
                 .arg(
-                    Arg::new("auto_ext")
-                        .long("auto-ext")
+                    Arg::new("convert_filename")
+                        .long("convert-filename")
                         .action(clap::ArgAction::SetTrue)
-                        .help("Infer format from file extension"),
+                        .help(
+                            "Convert the output filename using the selected OpenCC configuration",
+                        ),
                 ),
         )
         .subcommand(
@@ -309,7 +311,7 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
     let config = matches.get_one::<String>("config").unwrap();
     let punctuation = matches.get_flag("punct");
     let keep_font = matches.get_flag("keep_font");
-    let auto_ext = matches.get_flag("auto_ext");
+    let convert_filename = matches.get_flag("convert_filename");
     let format = matches.get_one::<String>("format").map(String::as_str);
 
     let helper = OpenccJieba::new();
@@ -317,8 +319,8 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
         input_file,
         output_file,
         format,
-        auto_ext,
         keep_font,
+        convert_filename,
         config,
         punctuation,
         |text, config, punctuation| helper.convert(text, config, punctuation),

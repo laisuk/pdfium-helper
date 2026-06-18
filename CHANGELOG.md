@@ -6,6 +6,14 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.1.5] - 2026-06-17
+
+### Changed
+
+- Update release workflow for `opencc-rs` v0.11.0 and `opencc-jieba` v0.7.6
+
+---
+
 ## [0.1.4] - 2026-05-25
 
 ### Changed

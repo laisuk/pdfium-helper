@@ -10,7 +10,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Update release workflow for `opencc-rs` v0.11.0 and `opencc-jieba` v0.7.6
+- Update release workflow for `opencc-rs` v0.11.1 and `opencc-jieba` v0.8.0
 - Optimized `opencc-rs` and `opencc-jieba` subcommand `office`
 
 ---

@@ -288,6 +288,19 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
         // 7) Dialog detection
         let current_is_dialog_start = begins_with_dialog_opener(&line_text);
 
+        // 9a-0) Complete single-line dialog.
+        // Flush previous buffer first, then emit this dialog as its own paragraph.
+        if current_is_dialog_start && ends_with_dialog_closer(&line_text) {
+            if !buffer.is_empty() {
+                segments.push(std::mem::take(&mut buffer));
+                dialog_state.reset();
+            }
+
+            segments.push(line_text.clone());
+            dialog_state.reset();
+            continue;
+        }
+
         // First line of a new paragraph
         if buffer.is_empty() {
             buffer.push_str(&line_text);

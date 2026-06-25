@@ -8,6 +8,11 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [0.1.5] - Unreleased
 
+
+### Added
+
+- Added `opencc-rs --custom-dict`
+
 ### Changed
 
 - Update release workflow for `opencc-rs` v0.11.1 and `opencc-jieba` v0.8.0

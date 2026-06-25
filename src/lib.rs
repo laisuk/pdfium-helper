@@ -1,15 +1,13 @@
+mod cjk_text;
 mod pdfium_loader;
 mod pdfium_text;
-mod reflow_helper;
 mod punct_sets;
+mod reflow_helper;
 mod utils;
-mod cjk_text;
 
 pub use pdfium_loader::{detect_platform_folder, PdfiumLibrary, PdfiumLoadError};
 pub use pdfium_text::{
-    extract_pdf_pages_with_callback_pdfium,
-    extract_pdf_text_pdfium,
-    PdfiumExtractError
+    extract_pdf_pages_with_callback_pdfium, extract_pdf_text_pdfium, PdfiumExtractError,
 };
 pub use reflow_helper::reflow_cjk_paragraphs;
 pub use reflow_helper::reflow_cjk_paragraphs_with_heading_regex;
@@ -27,4 +25,3 @@ pub use utils::*;
 //         assert_eq!(result, 4);
 //     }
 // }
-

@@ -221,11 +221,7 @@ fn is_ocr_cjk_ascii_punct_at_line_end(s: &str, punct_byte_index: usize, punct: c
 
 /// Relaxed OCR: after punct, allow only whitespace and closers (quote/bracket).
 /// This enables `“.”` / `.」` / `.）` to count as sentence boundary.
-fn is_ocr_cjk_ascii_punct_before_closers(
-    s: &str,
-    punct_byte_index: usize,
-    punct: char,
-) -> bool {
+fn is_ocr_cjk_ascii_punct_before_closers(s: &str, punct_byte_index: usize, punct: char) -> bool {
     is_at_end_allowing_closers(s, punct_byte_index, punct)
         && char_before_byte(s, punct_byte_index).is_some_and(is_cjk_bmp)
         && is_mostly_cjk(s)
@@ -432,7 +428,6 @@ fn is_ascii_latinish(ch: char) -> bool {
     )
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::ends_with_sentence_boundary;
@@ -443,4 +438,3 @@ mod tests {
         assert!(ends_with_sentence_boundary("这是结尾.)"));
     }
 }
-

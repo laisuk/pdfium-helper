@@ -113,7 +113,10 @@ fn extract_chunk_abc_callback_output_matches_full_text_api() {
     let via_full_text = extract_pdf_text_pdfium(pdfium, pdf_path_str, false)
         .unwrap_or_else(|e| panic!("full extraction failed for {}: {e}", pdf_path.display()));
 
-    assert_eq!(normalize_newlines(&via_callback), normalize_newlines(&via_full_text));
+    assert_eq!(
+        normalize_newlines(&via_callback),
+        normalize_newlines(&via_full_text)
+    );
 }
 
 #[test]

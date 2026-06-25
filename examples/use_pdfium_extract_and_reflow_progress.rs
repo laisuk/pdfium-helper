@@ -1,10 +1,7 @@
 use std::io::{self};
 use std::path::Path;
 
-use pdfium_helper::{
-    extract_pdf_pages_with_callback_pdfium,
-    reflow_cjk_paragraphs,
-};
+use pdfium_helper::{extract_pdf_pages_with_callback_pdfium, reflow_cjk_paragraphs};
 
 fn main() -> anyhow::Result<()> {
     // input_file = "tests/My_Golden_Blood.pdf";
@@ -19,8 +16,8 @@ fn main() -> anyhow::Result<()> {
 
     let mut pages: Vec<String> = Vec::new();
 
-        // Page-by-page extraction with progress
-    extract_pdf_pages_with_callback_pdfium(&pdfium, input_file, false,|page, total, text| {
+    // Page-by-page extraction with progress
+    extract_pdf_pages_with_callback_pdfium(&pdfium, input_file, false, |page, total, text| {
         pdfium_helper::print_progress(page, total, text);
         pages.push(text.to_owned());
     })?;
@@ -35,8 +32,7 @@ fn main() -> anyhow::Result<()> {
 
     println!("Reflowing CJK paragraphs...");
     let reflowed = reflow_cjk_paragraphs(
-        &full_text,
-        false, // add_pdf_page_header
+        &full_text, false, // add_pdf_page_header
         false, // compact
     );
 
@@ -72,4 +68,3 @@ fn write_text_unix_newlines<P: AsRef<Path>>(path: P, s: &str) -> io::Result<()> 
 //     print!("\r{}", line);
 //     let _ = io::stdout().flush();
 // }
-

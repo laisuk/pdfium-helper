@@ -22,7 +22,10 @@ fn main() -> anyhow::Result<()> {
     if text.trim().is_empty() {
         println!("Warning: input text is empty or whitespace only.");
     } else {
-        println!("Loaded {} characters from input file.", text.chars().count());
+        println!(
+            "Loaded {} characters from input file.",
+            text.chars().count()
+        );
     }
 
     // 2) Reflow CJK paragraphs

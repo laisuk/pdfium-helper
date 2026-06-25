@@ -672,4 +672,3 @@ fn decompress_native(zstd_bytes: &[u8]) -> Result<Vec<u8>, PdfiumLoadError> {
 
     Ok(out)
 }
-

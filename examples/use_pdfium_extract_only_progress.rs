@@ -1,4 +1,3 @@
-
 use pdfium_helper::{extract_pdf_pages_with_callback_pdfium, PdfiumLibrary};
 
 fn main() -> anyhow::Result<()> {
@@ -17,7 +16,6 @@ fn main() -> anyhow::Result<()> {
     // let (pdfium, _lib_path) = PdfiumLibrary::load_from_bundled_dir(&exe_dir)?;
     let (pdfium, lib_path) = PdfiumLibrary::load_with_fallbacks()?;
     println!("Loaded pdfium: {}", lib_path.display());
-
 
     let mut pages: Vec<String> = Vec::new();
 
@@ -50,7 +48,7 @@ fn main() -> anyhow::Result<()> {
     let full_text = pages.concat();
     println!(
         "Total extracted characters: {}",
-         pdfium_helper::format_thousand(full_text.chars().count())
+        pdfium_helper::format_thousand(full_text.chars().count())
     );
 
     println!("Writing extracted text to: {output_file}");

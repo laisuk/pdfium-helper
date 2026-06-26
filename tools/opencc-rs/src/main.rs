@@ -68,6 +68,7 @@ fn main() {
                 )
                 .arg(
                     Arg::new("convert_filename")
+                        .short('F')
                         .long("convert-filename")
                         .action(clap::ArgAction::SetTrue)
                         .help(
@@ -90,6 +91,7 @@ fn main() {
                 )
                 .arg(
                     Arg::new("compact")
+                        .short('C')
                         .long("compact")
                         .action(clap::ArgAction::SetTrue)
                         .help("Compact reflow output (remove extra blank lines/spaces)"),

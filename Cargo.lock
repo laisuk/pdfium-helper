@@ -658,7 +658,7 @@ dependencies = [
 [[package]]
 name = "opencc-jieba-rs"
 version = "0.8.0"
-source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#c9ab0c94bfc3aaf4915ea1dfce1eebeb8acff83e"
+source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#f796f3f55012753b06e751b4463ffd4dd1026efa"
 dependencies = [
  "include-flate",
  "jieba-rs",

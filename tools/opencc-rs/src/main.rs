@@ -180,6 +180,11 @@ fn common_args() -> Vec<Arg> {
             .long("punct")
             .action(clap::ArgAction::SetTrue)
             .help("Enable punctuation conversion"),
+        Arg::new("norm-compat")
+            .short('n')
+            .long("norm-compat")
+            .action(clap::ArgAction::SetTrue)
+            .help("Normalize CJK Compatibility Ideographs before conversion."),
         Arg::new("detofu")
             .long("detofu")
             .value_name("LEVEL")
@@ -194,6 +199,7 @@ fn common_args() -> Vec<Arg> {
          Custom mappings override built-in mappings (requires --detofu)",
             ),
         Arg::new("custom-dict")
+            .short('D')
             .long("custom-dict")
             .value_name("SLOT:MODE:FILE")
             .action(clap::ArgAction::Append)
@@ -233,11 +239,19 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     // let cc = OpenCC::new();
     let mut cc = build_opencc(matches)?;
 
+    let normalized_input;
+    let convert_input: &str = if matches.get_flag("norm-compat") {
+        normalized_input = cc.normalize_compat(&input_str);
+        &normalized_input
+    } else {
+        &input_str
+    };
+
     if matches.get_flag("keep-ids") {
         cc.set_preserve_ids(true);
     }
 
-    let output_str = cc.convert(&input_str, config, punctuation);
+    let output_str = cc.convert(&convert_input, config, punctuation);
 
     let output_str = if let Some(level) = matches.get_one::<String>("detofu") {
         let level = detofu::DetofuLevel::parse(level)?;

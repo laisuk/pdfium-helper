@@ -7,8 +7,8 @@ edition = "2021"
 revision = 0
 
 [dependencies]
-#opencc-jieba-rs = { git = "https://github.com/laisuk/opencc-jieba-rs.git", branch = "master" }
-opencc-jieba-rs= { path = "../../../opencc-jieba-rs" }
+opencc-jieba-rs = { git = "https://github.com/laisuk/opencc-jieba-rs.git", branch = "master" }
+#opencc-jieba-rs= { path = "../../../opencc-jieba-rs" }
 #opencc-jieba-rs = "0.7.6"
 clap = "=4.5"
 opencc-utils = { path = "../../crates/opencc-utils" }

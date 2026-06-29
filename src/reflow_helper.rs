@@ -273,6 +273,13 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
 
         let current_is_dialog_start = begins_with_dialog_opener(&line_text);
         let stripped_ends_with_dialog_closer = ends_with_dialog_closer(stripped);
+        let stripped_has_unclosed_bracket = has_unclosed_bracket(stripped);
+
+        let stripped_ends_with_strong_sentence_end = stripped
+            .chars()
+            .rev()
+            .next()
+            .is_some_and(is_strong_sentence_end);
 
         // 9a-0) Complete single-line dialog.
         if current_is_dialog_start && stripped_ends_with_dialog_closer {
@@ -317,15 +324,26 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
             && !stripped_ends_with_dialog_closer
             && !dialog_state.is_unclosed()
             && (!buffer_has_unclosed_bracket || buffer.len() > 360)
+            && stripped_ends_with_strong_sentence_end
         {
-            if let Some(last) = stripped.chars().rev().next() {
-                if is_strong_sentence_end(last) {
-                    buffer.push_str(&line_text);
-                    segments.push(std::mem::take(&mut buffer));
-                    dialog_state.reset();
-                    continue;
-                }
-            }
+            buffer.push_str(&line_text);
+            segments.push(std::mem::take(&mut buffer));
+            dialog_state.reset();
+            continue;
+        }
+
+        // 7b) Complete standalone sentence line.
+        // If buffer is empty and this line is already a complete sentence,
+        // emit it directly instead of waiting for the next line.
+        if buffer.is_empty()
+            && !stripped_ends_with_dialog_closer
+            // && !dialog_state.is_unclosed()
+            && !stripped_has_unclosed_bracket
+            && stripped_ends_with_strong_sentence_end
+        {
+            segments.push(line_text.clone());
+            dialog_state.reset();
+            continue;
         }
 
         // First line of a new paragraph
@@ -351,7 +369,7 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
                 let punct_before_closer_is_strong = is_clause_or_end_punct(prev_ch);
 
                 let buffer_has_bracket_issue = buffer_has_unclosed_bracket;
-                let line_has_bracket_issue = has_unclosed_bracket(stripped);
+                let line_has_bracket_issue = stripped_has_unclosed_bracket;
 
                 buffer.push_str(stripped);
                 dialog_state.update(stripped);

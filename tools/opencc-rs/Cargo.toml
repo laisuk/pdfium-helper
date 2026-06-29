@@ -1,6 +1,6 @@
 [package]
 name = "opencc-rs"
-version = "0.11.1"
+version = "0.11.2"
 edition = "2021"
 
 [package.metadata.capi]
@@ -17,9 +17,9 @@ rustc-hash = "=2.1.1"
 #time = "=0.3.41"
 #time-core = "=0.1.4"
 
-opencc-fmmseg = { git = "https://github.com/laisuk/opencc-fmmseg.git", branch = "master" }
+#opencc-fmmseg = { git = "https://github.com/laisuk/opencc-fmmseg.git", branch = "master" }
 #opencc-fmmseg = { path = "../../../opencc-fmmseg" }
-#opencc-fmmseg = "0.11"
+opencc-fmmseg = "0.11"
 opencc-utils = { path = "../../crates/opencc-utils" }
 
 [build-dependencies]

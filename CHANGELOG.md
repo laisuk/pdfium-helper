@@ -6,7 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.1.5] - Unreleased
+## [0.1.5] - 2026-06-29
 
 
 ### Added
@@ -15,8 +15,9 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Update release workflow for `opencc-rs` v0.11.1 and `opencc-jieba` v0.8.0
+- Update release workflow for `opencc-rs` v0.11.2 and `opencc-jieba` v0.8.0
 - Optimized `opencc-rs` and `opencc-jieba` subcommand `office`
+- Optimized `Reflow Helper` for completed standalone finalizer
 
 ---
 

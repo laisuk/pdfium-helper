@@ -1,11 +1,8 @@
-// pub mod detofu;
-
-mod detofu;
-
 use clap::builder::{StringValueParser, TypedValueParser, ValueParser};
 use clap::{Arg, ArgMatches, Command};
 use opencc_fmmseg::{
-    CustomDictFileSpec, CustomDictMode, DictSlot, DictionaryMaxlength, OpenCC, OpenccConfig,
+    detofu, CustomDictFileSpec, CustomDictMode, DetofuLevel, DetofuMap, DictSlot,
+    DictionaryMaxlength, OpenCC, OpenccConfig,
 };
 use opencc_utils::{
     convert_office_document, decode_input, encode_and_write_output, exit_on_error,
@@ -254,14 +251,14 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     let output_str = cc.convert(&convert_input, config, punctuation);
 
     let output_str = if let Some(level) = matches.get_one::<String>("detofu") {
-        let level = detofu::DetofuLevel::parse(level)?;
+        let level = DetofuLevel::parse(level)?;
 
         if let Some(path) = matches.get_one::<String>("detofu-file") {
-            detofu::DetofuMap::builtin(level)
+            DetofuMap::builtin(level)
                 .with_custom_file(path)?
                 .detofu(&output_str)
         } else {
-            detofu::detofu(&output_str, level)
+            detofu(&output_str, level)
         }
     } else {
         output_str

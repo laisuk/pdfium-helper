@@ -289,6 +289,7 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
         // 9a-0) Complete single-line dialog.
         if current_is_dialog_start
             && stripped_ends_with_dialog_closer
+            && !stripped_has_unclosed_bracket
             && !stripped_has_unclosed_dialog_quote
         {
             if !buffer.is_empty() {
@@ -332,7 +333,7 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
             && !stripped_ends_with_dialog_closer
             && !dialog_state.is_unclosed()
             && (!buffer_has_unclosed_bracket || buffer.len() > 360)
-            && stripped_ends_with_strong_sentence_end
+            && stripped_is_complete_standalone
         {
             buffer.push_str(&line_text);
             segments.push(std::mem::take(&mut buffer));
@@ -347,6 +348,7 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
             && !stripped_ends_with_dialog_closer
             // && !dialog_state.is_unclosed()
             && !stripped_has_unclosed_bracket
+            && !stripped_has_unclosed_dialog_quote
             && stripped_is_complete_standalone
         {
             segments.push(line_text.clone());

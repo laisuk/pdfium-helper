@@ -93,9 +93,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.102"
+version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
+checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "arbitrary"
@@ -630,8 +630,8 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencc-fmmseg"
-version = "0.11.2"
-source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#0187f79d5d816157681d3da8e6cbb5907e854621"
+version = "0.11.3"
+source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#f9322fd57a0a787b6ffaaeb00fb69ac836c71fa7"
 dependencies = [
  "rayon",
  "rayon-core",
@@ -659,7 +659,7 @@ dependencies = [
 [[package]]
 name = "opencc-jieba-rs"
 version = "0.8.0"
-source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#711c3e3b7b1b799fe63d13ed4156e6e4816911a9"
+source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#8e8907fa1b124f4ce70b41a75d44b29a58047435"
 dependencies = [
  "include-flate",
  "jieba-rs",
@@ -829,9 +829,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.12.3"
+version = "1.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e10754a14b9137dd7b1e3e5b0493cc9171fdd105e0ab477f51b72e7f3ac0e276"
+checksum = "f1292b7759ae1cb9ec195452d1390a074f0cd8541ab7a5a8c31cd6db45d4a6ba"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -852,9 +852,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.8.10"
+version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
+checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "rle-decode-fast"

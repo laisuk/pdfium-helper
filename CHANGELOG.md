@@ -12,6 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 - Update dictionary data.
 - Update CLI tools deps.
+- Optimized Reflow helper for handling unclosed dialog quote in standalone finalizer.
 
 ---
 

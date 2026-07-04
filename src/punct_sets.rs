@@ -11,6 +11,7 @@
 use smallvec::SmallVec;
 use std::collections::HashSet;
 use std::sync::OnceLock;
+use crate::cjk_text::is_cjk_bmp;
 
 /// Broad CJK punctuation that can appear at the end of a logical unit.
 ///
@@ -492,7 +493,7 @@ pub fn begins_with_simple_list_starter(s: &str) -> bool {
         }
 
         if chars[1] == '.' {
-            return len >= 3 && chars[2] == ' ';
+            return len >= 3 && (chars[2] == ' ' || is_cjk_bmp(chars[2]));
         }
 
         // 12) / 12） / 12、 / 12.
@@ -502,7 +503,7 @@ pub fn begins_with_simple_list_starter(s: &str) -> bool {
             }
 
             if chars[2] == '.' {
-                return len >= 4 && chars[3] == ' ';
+                return len >= 4 && (chars[3] == ' ' || is_cjk_bmp(chars[3]));
             }
         }
     }

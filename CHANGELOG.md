@@ -14,6 +14,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 - Update CLI tools deps.
 - Optimized Reflow helper for handling unclosed dialog quote in standalone finalizer.
 - Reflow: Allow commas in title headings when they appear within the first 20 characters.
+- Reflow: Fixed reflow stitching when a dialog closer appears on its own line after sentence-ending punctuation.
 
 ---
 

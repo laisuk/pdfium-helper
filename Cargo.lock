@@ -630,9 +630,9 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencc-fmmseg"
-version = "0.11.3"
+version = "0.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5e45821fbbdf178ffde25668d2ad3a5f3088556d493ab1eb30ea535f02453db"
+checksum = "ee529c19a7bdfcf500ce291959598def24b3ceca841ac9e6515b12cdbd966008"
 dependencies = [
  "rayon",
  "rayon-core",
@@ -660,7 +660,7 @@ dependencies = [
 [[package]]
 name = "opencc-jieba-rs"
 version = "0.8.0"
-source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#12d337fe6a14955d7c6c433367cb32c822068e68"
+source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#e5a4b387b73faa8c4b262038faf5d669760bd27d"
 dependencies = [
  "include-flate",
  "jieba-rs",
@@ -682,7 +682,7 @@ dependencies = [
 
 [[package]]
 name = "opencc-rs"
-version = "0.11.3"
+version = "0.11.4"
 dependencies = [
  "clap",
  "clap_lex",
@@ -830,9 +830,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.12.4"
+version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1292b7759ae1cb9ec195452d1390a074f0cd8541ab7a5a8c31cd6db45d4a6ba"
+checksum = "2a0e75113e14dc5acb068cd0786884f214f1312650a3d36d269f5c4f3cdee8a2"
 dependencies = [
  "aho-corasick",
  "memchr",

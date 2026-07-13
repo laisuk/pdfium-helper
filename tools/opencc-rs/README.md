@@ -125,8 +125,13 @@ Options:
 
 - `-i, --input`        Input file (default: stdin)
 - `-o, --output`       Output file (default: stdout)
-- `-c, --config`       OpenCC config (e.g. `s2t`, `t2s`, `s2tw`)
+- `-c, --config`       OpenCC config (e.g. `s2t`, `t2s`, `s2tw`, `t2hkp`, `hk2tp`)
 - `-p, --punct`        Convert punctuation
+
+Hong Kong phrase-aware configs added by `opencc-fmmseg` 0.11.4:
+
+- `t2hkp` – Traditional Chinese to Hong Kong Traditional with phrase mappings
+- `hk2tp` – Hong Kong Traditional to general Traditional with reverse phrase mappings
 
 ---
 

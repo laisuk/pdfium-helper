@@ -450,3 +450,44 @@ fn normalize_dict_slot_name(s: &str) -> String {
     }
     .to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cli_exposes_opencc_fmmseg_0_11_4_hong_kong_phrase_configs() {
+        let supported = get_supported_configs();
+
+        assert!(supported.split(" | ").any(|config| config == "t2hkp"));
+        assert!(supported.split(" | ").any(|config| config == "hk2tp"));
+        assert_eq!(OpenccConfig::try_from("t2hkp"), Ok(OpenccConfig::T2hkp));
+        assert_eq!(OpenccConfig::try_from("hk2tp"), Ok(OpenccConfig::Hk2tp));
+    }
+
+    #[test]
+    fn hong_kong_phrase_configs_convert_in_both_directions() {
+        let dictionary = DictionaryMaxlength::from_zstd().unwrap();
+        let (traditional, hong_kong) = dictionary
+            .hk_phrases
+            .map
+            .iter()
+            .next()
+            .map(|(source, target)| (source.iter().collect::<String>(), target.to_string()))
+            .expect("the built-in HKPhrases dictionary should not be empty");
+        let (hong_kong_reverse, traditional_reverse) = dictionary
+            .hk_phrases_rev
+            .map
+            .iter()
+            .next()
+            .map(|(source, target)| (source.iter().collect::<String>(), target.to_string()))
+            .expect("the built-in HKPhrasesRev dictionary should not be empty");
+        let cc = OpenCC::from_dictionary(dictionary);
+
+        assert_eq!(cc.convert(&traditional, "t2hkp", false), hong_kong);
+        assert_eq!(
+            cc.convert(&hong_kong_reverse, "hk2tp", false),
+            traditional_reverse
+        );
+    }
+}

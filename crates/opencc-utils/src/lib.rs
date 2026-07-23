@@ -128,6 +128,8 @@ pub fn convert_office_document<F>(
 where
     F: Fn(&str, &str, bool) -> String,
 {
+    validate_input_file(input_file)?;
+
     let office_extensions: HashSet<&'static str> =
         ["docx", "xlsx", "pptx", "odt", "ods", "odp", "epub"].into();
 
@@ -226,6 +228,7 @@ where
     F: FnMut(&str, &str, bool) -> String,
 {
     let input_norm = normalize_input_path(options.input_file);
+    validate_input_file(&input_norm)?;
     let input_path = Path::new(&input_norm);
     let final_output = default_pdf_output(input_path, options.output_file, options.extract_only);
 
@@ -481,6 +484,35 @@ fn find_pdfium_version_file(lib_path: &Path) -> Option<PathBuf> {
     None
 }
 
-pub fn open_input_file(file_name: &str) -> io::Result<BufReader<File>> {
-    Ok(BufReader::new(File::open(file_name)?))
+pub fn open_input_file<P: AsRef<Path>>(path: P) -> io::Result<BufReader<File>> {
+    let path = path.as_ref();
+    validate_input_file(path)?;
+    Ok(BufReader::new(File::open(path)?))
+}
+
+pub fn validate_input_file<P: AsRef<Path>>(path: P) -> io::Result<()> {
+    let path = path.as_ref();
+
+    let metadata = std::fs::metadata(path).map_err(|error| {
+        if error.kind() == io::ErrorKind::NotFound {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("Input file not found: {}", path.display()),
+            )
+        } else {
+            io::Error::new(
+                error.kind(),
+                format!("Cannot access input file {}: {error}", path.display()),
+            )
+        }
+    })?;
+
+    if !metadata.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Input path is not a file: {}", path.display()),
+        ));
+    }
+
+    Ok(())
 }

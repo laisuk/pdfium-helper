@@ -1,12 +1,7 @@
 use clap::builder::{StringValueParser, TypedValueParser, ValueParser};
 use clap::{Arg, ArgMatches, Command};
 use opencc_jieba_rs::{OpenCC as OpenccJieba, OpenccConfig as OpenccJiebaConfig};
-use opencc_utils::{
-    convert_office_document, decode_input, encode_and_write_output, exit_on_error,
-    handle_pdf_with_converter, normalize_line_endings, open_output, remove_utf8_bom,
-    should_remove_bom, PdfOptions,
-};
-use std::fs::File;
+use opencc_utils::{convert_office_document, decode_input, encode_and_write_output, exit_on_error, handle_pdf_with_converter, normalize_line_endings, open_input_file, open_output, remove_utf8_bom, should_remove_bom, PdfOptions};
 use std::io::{self, BufRead, BufReader, IsTerminal, Read};
 use std::sync::OnceLock;
 
@@ -274,7 +269,7 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
 
     let is_console = input_file.is_none();
     let mut input: Box<dyn Read> = match input_file {
-        Some(file_name) => Box::new(BufReader::new(File::open(file_name)?)),
+        Some(file_name) => Box::new(open_input_file(file_name)?),
         None => {
             if io::stdin().is_terminal() {
                 eprintln!("{PROMPT_CONVERT}");
@@ -346,7 +341,7 @@ fn handle_segment(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
 
     let is_console = input_file.is_none();
     let mut input: Box<dyn Read> = match input_file {
-        Some(file_name) => Box::new(BufReader::new(File::open(file_name)?)),
+        Some(file_name) => Box::new(open_input_file(file_name)?),
         None => {
             if io::stdin().is_terminal() {
                 eprintln!("{PROMPT_SEGMENT}");

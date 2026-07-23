@@ -4,11 +4,7 @@ use opencc_fmmseg::{
     detofu, CustomDictFileSpec, CustomDictMode, DetofuLevel, DetofuMap, DictSlot,
     DictionaryMaxlength, OpenCC, OpenccConfig,
 };
-use opencc_utils::{
-    convert_office_document, decode_input, encode_and_write_output, exit_on_error,
-    handle_pdf_with_converter, open_output, remove_utf8_bom, should_remove_bom, PdfOptions,
-};
-use std::fs::File;
+use opencc_utils::{convert_office_document, decode_input, encode_and_write_output, exit_on_error, handle_pdf_with_converter, open_input_file, open_output, remove_utf8_bom, should_remove_bom, PdfOptions};
 use std::io::{self, BufReader, IsTerminal, Read};
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -218,7 +214,7 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
 
     let is_console = input_file.is_none();
     let mut input: Box<dyn Read> = match input_file {
-        Some(file_name) => Box::new(BufReader::new(File::open(file_name)?)),
+        Some(file_name) => Box::new(open_input_file(file_name)?),
         None => {
             if io::stdin().is_terminal() {
                 println!("Input text to convert, <ctrl-z/d> to submit:");

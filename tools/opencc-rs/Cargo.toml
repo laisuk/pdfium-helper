@@ -19,7 +19,7 @@ rustc-hash = "=2.1.1"
 
 opencc-fmmseg = { git = "https://github.com/laisuk/opencc-fmmseg.git", branch = "master" }
 #opencc-fmmseg = { path = "../../../opencc-fmmseg" }
-#opencc-fmmseg = "0.11.4"
+#opencc-fmmseg = "0.11.5"
 opencc-utils = { path = "../../crates/opencc-utils" }
 
 [build-dependencies]

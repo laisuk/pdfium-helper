@@ -1,7 +1,12 @@
 use clap::builder::{StringValueParser, TypedValueParser, ValueParser};
 use clap::{Arg, ArgMatches, Command};
 use opencc_jieba_rs::{OpenCC as OpenccJieba, OpenccConfig as OpenccJiebaConfig};
-use opencc_utils::{convert_office_document, decode_input, encode_and_write_output, exit_on_error, handle_pdf_with_converter, normalize_line_endings, open_input_file, open_output, remove_utf8_bom, should_remove_bom, PdfOptions};
+use opencc_utils::{
+    convert_office_document, decode_input, encode_and_write_output, exit_on_error,
+    handle_pdf_with_converter, normalize_line_endings, open_input_file, open_output,
+    remove_utf8_bom, should_remove_bom, validate_distinct_input_output, validate_encoding,
+    validate_input_file, validate_output_path, PdfOptions,
+};
 use std::io::{self, BufRead, BufReader, IsTerminal, Read};
 use std::sync::OnceLock;
 
@@ -265,7 +270,17 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     let out_enc = matches.get_one::<String>("out_enc").unwrap();
     let punctuation = matches.get_flag("punct");
 
-    let opencc = OpenccJieba::new();
+    validate_encoding(in_enc)?;
+    validate_encoding(out_enc)?;
+    if let Some(input) = input_file {
+        validate_input_file(input)?;
+    }
+    if let Some(path) = output_file {
+        validate_output_path(path)?;
+        if let Some(input) = input_file {
+            validate_distinct_input_output(input, path)?;
+        }
+    }
 
     let is_console = input_file.is_none();
     let mut input: Box<dyn Read> = match input_file {
@@ -284,6 +299,7 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     }
 
     let input_str = decode_input(&buffer, in_enc)?;
+    let opencc = OpenccJieba::new();
     let output_str = opencc.convert(&input_str, config, punctuation);
 
     let (is_console_output, mut output) = open_output(output_file)?;
@@ -312,6 +328,10 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
     let convert_filename = matches.get_flag("convert_filename");
     let format = matches.get_one::<String>("format").map(String::as_str);
 
+    validate_input_file(input_file)?;
+    if let Some(path) = output_file {
+        validate_output_path(path)?;
+    }
     let helper = OpenccJieba::new();
     convert_office_document(
         input_file,
@@ -337,7 +357,17 @@ fn handle_segment(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     let out_enc = matches.get_one::<String>("out_enc").unwrap();
     let hmm = !matches.get_flag("no_hmm");
 
-    let opencc = OpenccJieba::new();
+    validate_encoding(in_enc)?;
+    validate_encoding(out_enc)?;
+    if let Some(input) = input_file {
+        validate_input_file(input)?;
+    }
+    if let Some(path) = output_file {
+        validate_output_path(path)?;
+        if let Some(input) = input_file {
+            validate_distinct_input_output(input, path)?;
+        }
+    }
 
     let is_console = input_file.is_none();
     let mut input: Box<dyn Read> = match input_file {
@@ -356,6 +386,7 @@ fn handle_segment(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     }
 
     let mut input_str = decode_input(&buffer, in_enc)?;
+    let opencc = OpenccJieba::new();
     if is_console {
         input_str = normalize_line_endings(&input_str);
         // Remove trailing submit newline from interactive console input
@@ -443,20 +474,29 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         )
     };
 
+    validate_input_file(input_file)?;
+    if let Some(path) = output_file {
+        validate_output_path(path)?;
+    }
+    let options = PdfOptions {
+        input_file,
+        output_file,
+        config,
+        punctuation,
+        reflow,
+        compact,
+        header,
+        extract_only,
+        pdfium_dir,
+        converter_name: "Opencc-Jieba",
+    };
+
+    if extract_only {
+        return handle_pdf_with_converter(options, |_, _, _| unreachable!());
+    }
+
     let helper = OpenccJieba::new();
-    handle_pdf_with_converter(
-        PdfOptions {
-            input_file,
-            output_file,
-            config,
-            punctuation,
-            reflow,
-            compact,
-            header,
-            extract_only,
-            pdfium_dir,
-            converter_name: "Opencc-Jieba",
-        },
-        |text, config, punctuation| helper.convert(text, config, punctuation),
-    )
+    handle_pdf_with_converter(options, |text, config, punctuation| {
+        helper.convert(text, config, punctuation)
+    })
 }

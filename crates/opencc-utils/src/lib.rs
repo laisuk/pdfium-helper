@@ -25,6 +25,7 @@ pub fn exit_on_error(result: Result<(), Box<dyn std::error::Error>>) {
 }
 
 pub fn decode_input(buffer: &[u8], enc: &str) -> io::Result<String> {
+    validate_encoding(enc)?;
     if enc.eq_ignore_ascii_case("UTF-8") {
         return Ok(String::from_utf8_lossy(buffer).into_owned());
     }
@@ -50,6 +51,7 @@ pub fn encode_and_write_output(
     enc: &str,
     output: &mut dyn Write,
 ) -> io::Result<()> {
+    validate_encoding(enc)?;
     if enc.eq_ignore_ascii_case("UTF-8") {
         output.write_all(output_str.as_bytes())?;
         return Ok(());
@@ -67,11 +69,102 @@ pub fn encode_and_write_output(
     Ok(())
 }
 
+pub fn validate_encoding(enc: &str) -> io::Result<()> {
+    if enc.eq_ignore_ascii_case("UTF-8") || Encoding::for_label(enc.as_bytes()).is_some() {
+        Ok(())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Unsupported encoding: {enc}"),
+        ))
+    }
+}
+
+pub fn validate_output_path<P: AsRef<Path>>(path: P) -> io::Result<()> {
+    let path = path.as_ref();
+
+    if path.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Output path is a directory: {}", path.display()),
+        ));
+    }
+
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        let metadata = std::fs::metadata(parent).map_err(|error| {
+            io::Error::new(
+                error.kind(),
+                format!(
+                    "Cannot access output directory {}: {error}",
+                    parent.display()
+                ),
+            )
+        })?;
+        if !metadata.is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Output parent is not a directory: {}", parent.display()),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+pub fn validate_distinct_input_output<I: AsRef<Path>, O: AsRef<Path>>(
+    input: I,
+    output: O,
+) -> io::Result<()> {
+    let input_path = input.as_ref();
+    let output_path = output.as_ref();
+
+    // Reject the common case without touching the filesystem. Besides being
+    // cheaper, this guarantees our public InvalidInput error even on platforms
+    // where canonicalization can fail with a less useful OS-specific error.
+    if input_path == output_path {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "Input and output refer to the same file: {}",
+                output_path.display()
+            ),
+        ));
+    }
+
+    // Canonical alias detection is an additional safety check, not a
+    // requirement for overwriting a distinct output. Some mapped/network
+    // filesystems do not support Windows' canonicalization operation and
+    // return ERROR_INVALID_FUNCTION for otherwise valid existing files.
+    if output_path.exists() {
+        if let (Ok(input), Ok(output)) = (
+            std::fs::canonicalize(input_path),
+            std::fs::canonicalize(output_path),
+        ) {
+            if output == input {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!(
+                        "Input and output refer to the same file: {}",
+                        output_path.display()
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn open_output(output_file: Option<&String>) -> io::Result<(bool, Box<dyn Write>)> {
     let is_console_output = output_file.is_none();
 
     let output: Box<dyn Write> = match output_file {
-        Some(file_name) => Box::new(BufWriter::new(File::create(file_name)?)),
+        Some(file_name) => {
+            validate_output_path(file_name)?;
+            Box::new(BufWriter::new(File::create(file_name)?))
+        }
         None => Box::new(BufWriter::new(io::stdout().lock())),
     };
 
@@ -148,7 +241,7 @@ where
             return Err(format!(
                 "❌  Unsupported Office extension: .{ext}. Please provide --format."
             )
-            .into());
+                .into());
         }
     };
 
@@ -183,6 +276,8 @@ where
                 .to_string()
         }
     };
+    validate_output_path(&final_output)?;
+    validate_distinct_input_output(input_file, &final_output)?;
 
     match OfficeConverter::convert(
         input_file,
@@ -231,6 +326,8 @@ where
     validate_input_file(&input_norm)?;
     let input_path = Path::new(&input_norm);
     let final_output = default_pdf_output(input_path, options.output_file, options.extract_only);
+    validate_output_path(&final_output)?;
+    validate_distinct_input_output(input_path, &final_output)?;
 
     if options.extract_only {
         println!("Extracting PDF page-by-page with PDFium (extract-only): {input_norm}");
@@ -515,4 +612,64 @@ pub fn validate_input_file<P: AsRef<Path>>(path: P) -> io::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_encoding_rejects_unknown_labels() {
+        assert!(validate_encoding("UTF-8").is_ok());
+        assert!(validate_encoding("BIG5").is_ok());
+        assert_eq!(
+            validate_encoding("definitely-not-an-encoding")
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
+    }
+
+    #[test]
+    fn validate_output_path_rejects_directories_and_missing_parents() {
+        let temp = std::env::temp_dir();
+        assert_eq!(
+            validate_output_path(&temp).unwrap_err().kind(),
+            io::ErrorKind::InvalidInput
+        );
+
+        let missing = temp.join("opencc-utils-missing-parent").join("output.txt");
+        assert_eq!(
+            validate_output_path(missing).unwrap_err().kind(),
+            io::ErrorKind::NotFound
+        );
+    }
+
+    #[test]
+    fn validate_distinct_input_output_rejects_the_same_file() {
+        let path =
+            std::env::temp_dir().join(format!("opencc-utils-same-file-{}", std::process::id()));
+        std::fs::write(&path, b"test").unwrap();
+
+        let result = validate_distinct_input_output(&path, &path);
+        std::fs::remove_file(&path).unwrap();
+
+        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn validate_distinct_input_output_accepts_existing_distinct_file() {
+        let temp = std::env::temp_dir();
+        let suffix = std::process::id();
+        let input = temp.join(format!("opencc-utils-input-{suffix}"));
+        let output = temp.join(format!("opencc-utils-output-{suffix}"));
+        std::fs::write(&input, b"input").unwrap();
+        std::fs::write(&output, b"old output").unwrap();
+
+        let result = validate_distinct_input_output(&input, &output);
+        std::fs::remove_file(&input).unwrap();
+        std::fs::remove_file(&output).unwrap();
+
+        assert!(result.is_ok());
+    }
 }

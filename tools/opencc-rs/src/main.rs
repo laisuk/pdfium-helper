@@ -1,10 +1,15 @@
 use clap::builder::{StringValueParser, TypedValueParser, ValueParser};
 use clap::{Arg, ArgMatches, Command};
 use opencc_fmmseg::{
-    detofu, CustomDictFileSpec, CustomDictMode, DetofuLevel, DetofuMap, DictSlot,
-    DictionaryMaxlength, OpenCC, OpenccConfig,
+    CustomDictFileSpec, CustomDictMode, DetofuLevel, DetofuMap, DictSlot, DictionaryMaxlength,
+    OpenCC, OpenccConfig,
 };
-use opencc_utils::{convert_office_document, decode_input, encode_and_write_output, exit_on_error, handle_pdf_with_converter, open_input_file, open_output, remove_utf8_bom, should_remove_bom, PdfOptions};
+use opencc_utils::{
+    convert_office_document, decode_input, encode_and_write_output, exit_on_error,
+    handle_pdf_with_converter, open_input_file, open_output, remove_utf8_bom, should_remove_bom,
+    validate_distinct_input_output, validate_encoding, validate_input_file, validate_output_path,
+    PdfOptions,
+};
 use std::io::{self, BufReader, IsTerminal, Read};
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -187,6 +192,7 @@ fn common_args() -> Vec<Arg> {
         Arg::new("detofu-file")
             .long("detofu-file")
             .value_name("FILE")
+            .requires("detofu")
             .help(
                 "Load additional detofu fallback mappings from a UTF-8 text file. \
          Custom mappings override built-in mappings (requires --detofu)",
@@ -208,9 +214,33 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     let out_enc = matches.get_one::<String>("out_enc").unwrap();
     let punctuation = matches.get_flag("punct");
 
-    if matches.contains_id("detofu-file") && matches.get_one::<String>("detofu").is_none() {
-        return Err("--detofu-file requires --detofu".into());
+    validate_encoding(in_enc)?;
+    validate_encoding(out_enc)?;
+    if let Some(input) = input_file {
+        validate_input_file(input)?;
     }
+    if let Some(path) = output_file {
+        validate_output_path(path)?;
+        if let Some(input) = input_file {
+            validate_distinct_input_output(input, path)?;
+        }
+    }
+
+    let detofu_map = match matches.get_one::<String>("detofu") {
+        Some(level) => {
+            let level = DetofuLevel::parse(level)?;
+            match matches.get_one::<String>("detofu-file") {
+                Some(path) => {
+                    validate_input_file(path)?;
+                    Some(DetofuMap::builtin(level).with_custom_file(path)?)
+                }
+                None => Some(DetofuMap::builtin(level)),
+            }
+        }
+        None => None,
+    };
+
+    let mut cc = build_opencc(matches)?;
 
     let is_console = input_file.is_none();
     let mut input: Box<dyn Read> = match input_file {
@@ -229,9 +259,6 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     }
 
     let input_str = decode_input(&buffer, in_enc)?;
-    // let cc = OpenCC::new();
-    let mut cc = build_opencc(matches)?;
-
     let normalized_input;
     let convert_input: &str = if matches.get_flag("norm-compat") {
         normalized_input = cc.normalize_compat(&input_str);
@@ -246,16 +273,8 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
 
     let output_str = cc.convert(&convert_input, config, punctuation);
 
-    let output_str = if let Some(level) = matches.get_one::<String>("detofu") {
-        let level = DetofuLevel::parse(level)?;
-
-        if let Some(path) = matches.get_one::<String>("detofu-file") {
-            DetofuMap::builtin(level)
-                .with_custom_file(path)?
-                .detofu(&output_str)
-        } else {
-            detofu(&output_str, level)
-        }
+    let output_str = if let Some(map) = detofu_map {
+        map.detofu(&output_str)
     } else {
         output_str
     };
@@ -298,7 +317,10 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
     let convert_filename = matches.get_flag("convert_filename");
     let format = matches.get_one::<String>("format").map(String::as_str);
 
-    // let helper = OpenCC::new();
+    validate_input_file(input_file)?;
+    if let Some(path) = output_file {
+        validate_output_path(path)?;
+    }
     let helper = build_opencc(matches)?;
 
     convert_office_document(
@@ -354,24 +376,31 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         )
     };
 
-    // let helper = OpenCC::new();
-    let helper = build_opencc(matches)?;
+    validate_input_file(input_file)?;
+    if let Some(path) = output_file {
+        validate_output_path(path)?;
+    }
+    let options = PdfOptions {
+        input_file,
+        output_file,
+        config,
+        punctuation,
+        reflow,
+        compact,
+        header,
+        extract_only,
+        pdfium_dir,
+        converter_name: "Opencc-Fmmseg",
+    };
 
-    handle_pdf_with_converter(
-        PdfOptions {
-            input_file,
-            output_file,
-            config,
-            punctuation,
-            reflow,
-            compact,
-            header,
-            extract_only,
-            pdfium_dir,
-            converter_name: "Opencc-Fmmseg",
-        },
-        |text, config, punctuation| helper.convert(text, config, punctuation),
-    )
+    if extract_only {
+        return handle_pdf_with_converter(options, |_, _, _| unreachable!());
+    }
+
+    let helper = build_opencc(matches)?;
+    handle_pdf_with_converter(options, |text, config, punctuation| {
+        helper.convert(text, config, punctuation)
+    })
 }
 
 fn build_opencc(matches: &ArgMatches) -> Result<OpenCC, Box<dyn std::error::Error>> {
@@ -382,6 +411,12 @@ fn build_opencc(matches: &ArgMatches) -> Result<OpenCC, Box<dyn std::error::Erro
     let specs = values
         .map(|v| parse_custom_dict_spec(v))
         .collect::<Result<Vec<_>, _>>()?;
+
+    for spec in &specs {
+        for file in &spec.files {
+            validate_input_file(file)?;
+        }
+    }
 
     let dictionary = DictionaryMaxlength::from_zstd()?.with_custom_dict_files(&specs)?;
 
@@ -396,12 +431,15 @@ fn parse_custom_dict_spec(
     let slot = parts.next().ok_or("Missing custom dict slot")?;
     let mode = parts.next().ok_or("Missing custom dict mode")?;
     let file = parts.next().ok_or("Missing custom dict file")?;
+    let file = file.trim();
+    if file.is_empty() {
+        return Err("Custom dictionary path cannot be empty".into());
+    }
 
-    let slot_name = normalize_dict_slot_name(slot);
-    let slot = DictSlot::try_from(slot_name.as_str())
-        .map_err(|_| format!("Unknown custom dictionary slot: {slot}"))?;
+    let slot = DictSlot::from_name_ignore_ascii_case(slot.trim())
+        .ok_or_else(|| format!("Unknown custom dictionary slot: {slot}"))?;
 
-    let mode = match mode.to_ascii_lowercase().as_str() {
+    let mode = match mode.trim().to_ascii_lowercase().as_str() {
         "append" => CustomDictMode::Append,
         "override" => CustomDictMode::Override,
         other => return Err(format!("Unknown custom dict mode: {other}").into()),
@@ -412,39 +450,6 @@ fn parse_custom_dict_spec(
         files: vec![PathBuf::from(file)],
         mode,
     })
-}
-
-fn normalize_dict_slot_name(s: &str) -> String {
-    match s.trim().to_ascii_lowercase().as_str() {
-        "stcharacters" => "STCharacters",
-        "stphrases" => "STPhrases",
-        "stpunctuations" => "STPunctuations",
-
-        "tscharacters" => "TSCharacters",
-        "tsphrases" => "TSPhrases",
-        "tspunctuations" => "TSPunctuations",
-
-        "twphrases" => "TWPhrases",
-        "twphrasesrev" => "TWPhrasesRev",
-        "twvariants" => "TWVariants",
-        "twvariantsphrases" => "TWVariantsPhrases",
-        "twvariantsrev" => "TWVariantsRev",
-        "twvariantsrevphrases" => "TWVariantsRevPhrases",
-
-        "hkphrases" => "HKPhrases",
-        "hkphrasesrev" => "HKPhrasesRev",
-        "hkvariants" => "HKVariants",
-        "hkvariantsphrases" => "HKVariantsPhrases",
-        "hkvariantsrev" => "HKVariantsRev",
-        "hkvariantsrevphrases" => "HKVariantsRevPhrases",
-
-        "jpscharacters" => "JPSCharacters",
-        "jpscharactersrev" => "JPSCharactersRev",
-        "jpsphrases" => "JPSPhrases",
-
-        _ => s.trim(),
-    }
-    .to_string()
 }
 
 #[cfg(test)]
@@ -485,5 +490,19 @@ mod tests {
             cc.convert(&hong_kong_reverse, "hk2tp", false),
             traditional_reverse
         );
+    }
+
+    #[test]
+    fn custom_dict_specs_use_canonical_case_insensitive_slot_parsing() {
+        let spec = parse_custom_dict_spec("hkphrasesrev:APPEND:custom.txt").unwrap();
+
+        assert_eq!(spec.slot, DictSlot::HKPhrasesRev);
+        assert_eq!(spec.mode, CustomDictMode::Append);
+        assert_eq!(spec.files, vec![PathBuf::from("custom.txt")]);
+    }
+
+    #[test]
+    fn custom_dict_specs_reject_empty_paths() {
+        assert!(parse_custom_dict_spec("STPhrases:append:   ").is_err());
     }
 }

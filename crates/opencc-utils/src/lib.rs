@@ -83,6 +83,13 @@ pub fn validate_encoding(enc: &str) -> io::Result<()> {
 pub fn validate_output_path<P: AsRef<Path>>(path: P) -> io::Result<()> {
     let path = path.as_ref();
 
+    if path.as_os_str().is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Output path cannot be empty",
+        ));
+    }
+
     if path.is_dir() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -247,6 +254,7 @@ where
 
     let final_output = match output_file {
         Some(path) => {
+            validate_output_path(path)?;
             let output_path = Path::new(path);
 
             if output_path.extension().is_none() {
@@ -631,14 +639,24 @@ mod tests {
     }
 
     #[test]
-    fn validate_output_path_rejects_directories_and_missing_parents() {
+    fn validate_output_path_rejects_empty_directories_and_missing_parents() {
+        assert_eq!(
+            validate_output_path("").unwrap_err().kind(),
+            io::ErrorKind::InvalidInput
+        );
+
         let temp = std::env::temp_dir();
         assert_eq!(
             validate_output_path(&temp).unwrap_err().kind(),
             io::ErrorKind::InvalidInput
         );
 
-        let missing = temp.join("opencc-utils-missing-parent").join("output.txt");
+        let missing = temp
+            .join(format!(
+                "opencc-utils-missing-parent-{}",
+                std::process::id()
+            ))
+            .join("output.txt");
         assert_eq!(
             validate_output_path(missing).unwrap_err().kind(),
             io::ErrorKind::NotFound

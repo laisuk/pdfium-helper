@@ -26,7 +26,7 @@ jobs:
 
       - name: Check workspace on MSRV
         if: github.event_name == 'push'
-        run: cargo check --workspace --all-features --locked
+        run: cargo test --workspace --all-features --locked
 
       - name: Test workspace on MSRV
         if: github.event_name != 'push'

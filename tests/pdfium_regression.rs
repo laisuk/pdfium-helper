@@ -150,7 +150,7 @@ fn reflow_yi_zuo_fei_matches_current_golden_text() {
 fn extract_jiamianyouxi_smoke_test_produces_non_empty_pages() {
     let _guard = extraction_lock();
     let pdfium = load_pdfium();
-    let pdf_path = fixture_path("tests/SanWen.pdf");
+    let pdf_path = fixture_path("tests/SanWenHant.pdf");
     let pdf_path_str = pdf_path
         .to_str()
         .unwrap_or_else(|| panic!("non-utf8 test path: {}", pdf_path.display()));

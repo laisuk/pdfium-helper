@@ -414,8 +414,7 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
                     .map(|(_, prev)| prev)
                     .or_else(|| buffer.chars().rev().find(|c| !c.is_whitespace()));
 
-                let punct_before_closer_is_strong =
-                    prev_ch.is_some_and(is_clause_or_end_punct);
+                let punct_before_closer_is_strong = prev_ch.is_some_and(is_clause_or_end_punct);
 
                 let buffer_has_bracket_issue = buffer_has_unclosed_bracket;
                 let line_has_bracket_issue = stripped_has_unclosed_bracket;
@@ -509,7 +508,7 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
 // ---------------------------------------------------------------------------
 
 const HEADING_KEYWORDS: &[&str] = &[
-    "前言", "序章", "终章", "尾声", "后记", "番外", "尾聲", "後記",
+    "前言", "序章", "终章", "尾声", "后记", "番外", "尾聲", "後記", "楔子", "目录", "目錄",
 ];
 
 fn is_metadata_line(line: &str) -> bool {

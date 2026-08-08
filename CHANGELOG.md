@@ -20,6 +20,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 - Reflow: Allow commas in title headings when they appear within the first 20 characters.
 - Reflow: Fixed reflow stitching when a dialog closer appears on its own line after sentence-ending punctuation.
 - Update release workflow for `opencc-rs` v0.11.4 and `opencc-jieba` v0.8.0 (updated).
+- Update Pdfium natives to `152.0.7961.0`.
 
 ---
 

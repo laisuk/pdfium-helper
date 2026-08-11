@@ -364,9 +364,9 @@ dependencies = [
 
 [[package]]
 name = "encoding_rs_io"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cc3c5651fb62ab8aa3103998dade57efdd028544bd300516baa31840c252a83"
+checksum = "fba3fe847045ecff794b9c138293a80db914678c453ad63fbf0c6a9eb6e00b22"
 dependencies = [
  "encoding_rs",
 ]
@@ -630,8 +630,8 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencc-fmmseg"
-version = "0.11.5"
-source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#b84f36694cd9a7ef9186780261148111b6be2702"
+version = "0.11.6"
+source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#6416085933499f4e14f817f85ab172a2fa8ad8eb"
 dependencies = [
  "rayon",
  "rayon-core",
@@ -681,7 +681,7 @@ dependencies = [
 
 [[package]]
 name = "opencc-rs"
-version = "0.11.5"
+version = "0.11.6"
 dependencies = [
  "clap",
  "clap_lex",

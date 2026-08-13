@@ -631,7 +631,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 [[package]]
 name = "opencc-fmmseg"
 version = "0.11.6"
-source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#6416085933499f4e14f817f85ab172a2fa8ad8eb"
+source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#6b7ccf28c2e3d26044b02251345f66f948de1587"
 dependencies = [
  "rayon",
  "rayon-core",
@@ -659,7 +659,7 @@ dependencies = [
 [[package]]
 name = "opencc-jieba-rs"
 version = "0.8.0"
-source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#cfe9b299e61fb87a11e6042feb48af5eec917046"
+source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#41e1d3fbbd264d201d25eb897198adddf941c16d"
 dependencies = [
  "include-flate",
  "jieba-rs",
@@ -995,18 +995,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.19"
+version = "2.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09a43598840e33d5b0331f38c5e30d13bb11c11210a4b58f0d9b18a5a5eefcd9"
+checksum = "ec86235f5fcc2a73650310756d2ac5b138a5780bbbdfae3eeccec992c435ba4f"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.19"
+version = "2.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43cbfe0cf76104d42a574802844187e84a305e531ed54455f11fbde0f10541cd"
+checksum = "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af"
 dependencies = [
  "proc-macro2",
  "quote",

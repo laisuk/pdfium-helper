@@ -226,19 +226,7 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
         }
     }
 
-    let detofu_map = match matches.get_one::<String>("detofu") {
-        Some(level) => {
-            let level = DetofuLevel::parse(level)?;
-            match matches.get_one::<String>("detofu-file") {
-                Some(path) => {
-                    validate_input_file(path)?;
-                    Some(DetofuMap::builtin(level).with_custom_file(path)?)
-                }
-                None => Some(DetofuMap::builtin(level)),
-            }
-        }
-        None => None,
-    };
+    let detofu_map = build_detofu_map(matches)?;
 
     let mut cc = build_opencc(matches)?;
 
@@ -450,6 +438,23 @@ fn parse_custom_dict_spec(
         files: vec![PathBuf::from(file)],
         mode,
     })
+}
+
+fn build_detofu_map(matches: &ArgMatches) -> Result<Option<DetofuMap>, Box<dyn std::error::Error>> {
+    let Some(level) = matches.get_one::<String>("detofu") else {
+        return Ok(None);
+    };
+
+    let level = DetofuLevel::parse(level)?;
+    let map = DetofuMap::builtin(level);
+
+    match matches.get_one::<String>("detofu-file") {
+        Some(path) => {
+            validate_input_file(path)?;
+            Ok(Some(map.with_custom_file(path)?))
+        }
+        None => Ok(Some(map)),
+    }
 }
 
 #[cfg(test)]

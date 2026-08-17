@@ -267,18 +267,6 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
         output_str
     };
 
-    // let output_str = if let Some(level) = matches.get_one::<String>("detofu") {
-    //     let level = DetofuLevel::parse(level)?;
-    //
-    //     if let Some(path) = matches.get_one::<String>("detofu-file") {
-    //         cc.detofu_with_custom_file(&output_str, level, path)?
-    //     } else {
-    //         cc.detofu(&output_str, level)
-    //     }
-    // } else {
-    //     output_str
-    // };
-
     let (is_console_output, mut output) = open_output(output_file)?;
 
     let final_output = if is_console_output && !output_str.ends_with('\n') {

@@ -1,6 +1,9 @@
 use clap::builder::{StringValueParser, TypedValueParser, ValueParser};
 use clap::{Arg, ArgMatches, Command};
-use opencc_jieba_rs::{OpenCC as OpenccJieba, OpenccConfig as OpenccJiebaConfig};
+use opencc_jieba_rs::{
+    CustomDictFileSpec as CustomDictFileSpecJieba, CustomDictMode as CustomDictModeJieba,
+    DictSlot as DictSlotJieba, OpenCC as OpenccJieba, OpenccConfig as OpenccJiebaConfig,
+};
 use opencc_utils::{
     convert_office_document, decode_input, encode_and_write_output, exit_on_error,
     handle_pdf_with_converter, normalize_line_endings, open_input_file, open_output,
@@ -8,6 +11,7 @@ use opencc_utils::{
     validate_input_file, validate_output_path, PdfOptions,
 };
 use std::io::{self, BufRead, BufReader, IsTerminal, Read};
+use std::path::PathBuf;
 use std::sync::OnceLock;
 
 const BLUE: &str = "\x1B[1;34m";
@@ -242,6 +246,16 @@ fn common_args() -> Vec<Arg> {
             .long("punct")
             .action(clap::ArgAction::SetTrue)
             .help("Enable punctuation conversion"),
+        Arg::new("custom-dict")
+            .short('D')
+            .long("custom-dict")
+            .value_name("SLOT:MODE:FILE")
+            .action(clap::ArgAction::Append)
+            .help(
+                "Custom conversion dictionary file, e.g. \
+                             HKPhrasesRev:append:my_hk_dict.txt \
+                             (slot names are ASCII case-insensitive)",
+            ),
     ]
 }
 
@@ -299,7 +313,8 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     }
 
     let input_str = decode_input(&buffer, in_enc)?;
-    let opencc = OpenccJieba::new();
+    // let opencc = OpenccJieba::new();
+    let opencc = build_opencc_jieba(matches)?;
     let output_str = opencc.convert(&input_str, config, punctuation);
 
     let (is_console_output, mut output) = open_output(output_file)?;
@@ -332,7 +347,8 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
     if let Some(path) = output_file {
         validate_output_path(path)?;
     }
-    let helper = OpenccJieba::new();
+    // let helper = OpenccJieba::new();
+    let helper = build_opencc_jieba(matches)?;
     convert_office_document(
         input_file,
         output_file,
@@ -495,8 +511,61 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         return handle_pdf_with_converter(options, |_, _, _| unreachable!());
     }
 
-    let helper = OpenccJieba::new();
+    // let helper = OpenccJieba::new();
+    let helper = build_opencc_jieba(matches)?;
     handle_pdf_with_converter(options, |text, config, punctuation| {
         helper.convert(text, config, punctuation)
+    })
+}
+
+/// Builds the converter used by the `convert`, `office` and `pdf` subcommand.
+///
+/// Without `-D/--custom-dict`, this returns the normal built-in converter.
+/// When one or more custom dictionary specs are supplied, they are parsed and
+/// applied post-load in command-line order.
+///
+/// Custom conversion dictionaries affect OpenCC mappings only; Jieba
+/// segmentation dictionaries remain unchanged.
+fn build_opencc_jieba(matches: &ArgMatches) -> Result<OpenccJieba, Box<dyn std::error::Error>> {
+    let mut opencc = OpenccJieba::new();
+
+    let Some(values) = matches.get_many::<String>("custom-dict") else {
+        return Ok(opencc);
+    };
+
+    let specs = values
+        .map(|value| parse_custom_dict_spec(value))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    opencc.load_custom_dict_files(&specs)?;
+    Ok(opencc)
+}
+
+fn parse_custom_dict_spec(
+    arg: &str,
+) -> Result<CustomDictFileSpecJieba<PathBuf>, Box<dyn std::error::Error>> {
+    let mut parts = arg.splitn(3, ':');
+
+    let slot = parts.next().ok_or("Missing custom dict slot")?;
+    let mode = parts.next().ok_or("Missing custom dict mode")?;
+    let file = parts.next().ok_or("Missing custom dict file")?;
+    let file = file.trim();
+    if file.is_empty() {
+        return Err("Custom dictionary path cannot be empty".into());
+    }
+
+    let slot = DictSlotJieba::from_name_ignore_ascii_case(slot.trim())
+        .ok_or_else(|| format!("Unknown custom dictionary slot: {slot}"))?;
+
+    let mode = match mode.trim().to_ascii_lowercase().as_str() {
+        "append" => CustomDictModeJieba::Append,
+        "override" => CustomDictModeJieba::Override,
+        other => return Err(format!("Unknown custom dict mode: {other}").into()),
+    };
+
+    Ok(CustomDictFileSpecJieba {
+        slot,
+        files: vec![PathBuf::from(file)],
+        mode,
     })
 }

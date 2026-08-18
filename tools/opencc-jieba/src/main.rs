@@ -136,6 +136,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .action(clap::ArgAction::SetTrue)
                         .help("Disable HMM for segmentation and tagging"),
                 )
+                .arg(user_dict_arg())
                 .args(enc_args()),
         )
         .subcommand(
@@ -220,6 +221,15 @@ fn config_value_parser() -> ValueParser {
     }))
 }
 
+fn user_dict_arg() -> Arg {
+    Arg::new("user-dict-file")
+        .short('U')
+        .long("user-dict-file")
+        .value_name("FILE")
+        .action(clap::ArgAction::Append)
+        .help("Jieba user dictionary file; may be specified multiple times")
+}
+
 fn common_args() -> Vec<Arg> {
     vec![
         Arg::new("input")
@@ -256,6 +266,7 @@ fn common_args() -> Vec<Arg> {
                              HKPhrasesRev:append:my_hk_dict.txt \
                              (slot names are ASCII case-insensitive)",
             ),
+        user_dict_arg(),
     ]
 }
 
@@ -402,7 +413,8 @@ fn handle_segment(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     }
 
     let mut input_str = decode_input(&buffer, in_enc)?;
-    let opencc = OpenccJieba::new();
+    let mut opencc = OpenccJieba::new();
+    load_user_dict_files(&mut opencc, matches)?;
     if is_console {
         input_str = normalize_line_endings(&input_str);
         // Remove trailing submit newline from interactive console input
@@ -518,26 +530,42 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     })
 }
 
-/// Builds the converter used by the `convert`, `office` and `pdf` subcommand.
+/// Loads all repeatable `-U/--user-dict-file` arguments into the current
+/// Jieba tokenizer in command-line order.
+fn load_user_dict_files(
+    opencc: &mut OpenccJieba,
+    matches: &ArgMatches,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(paths) = matches.get_many::<String>("user-dict-file") {
+        for path in paths {
+            opencc.load_user_dict(path)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Builds the converter used by the `convert`, `office`, and `pdf` subcommands.
 ///
-/// Without `-D/--custom-dict`, this returns the normal built-in converter.
-/// When one or more custom dictionary specs are supplied, they are parsed and
-/// applied post-load in command-line order.
+/// Repeatable `-U/--user-dict-file` arguments are loaded into Jieba first.
+/// Repeatable `-D/--custom-dict` specifications are then parsed and applied to
+/// the OpenCC conversion dictionary in command-line order.
 ///
-/// Custom conversion dictionaries affect OpenCC mappings only; Jieba
-/// segmentation dictionaries remain unchanged.
+/// Jieba user dictionaries affect tokenization only. Custom OpenCC dictionaries
+/// affect conversion mappings only.
 fn build_opencc_jieba(matches: &ArgMatches) -> Result<OpenccJieba, Box<dyn std::error::Error>> {
     let mut opencc = OpenccJieba::new();
 
-    let Some(values) = matches.get_many::<String>("custom-dict") else {
-        return Ok(opencc);
-    };
+    load_user_dict_files(&mut opencc, matches)?;
 
-    let specs = values
-        .map(|value| parse_custom_dict_spec(value))
-        .collect::<Result<Vec<_>, _>>()?;
+    if let Some(values) = matches.get_many::<String>("custom-dict") {
+        let specs = values
+            .map(|value| parse_custom_dict_spec(value))
+            .collect::<Result<Vec<_>, _>>()?;
 
-    opencc.load_custom_dict_files(&specs)?;
+        opencc.load_custom_dict_files(&specs)?;
+    }
+
     Ok(opencc)
 }
 

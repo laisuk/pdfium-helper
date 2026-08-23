@@ -11,6 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Added `t2hkp` and `hk2tp` conversion configs to `opencc-rs`, aligned with `opencc-fmmseg` v0.11.4.
+- Cli: added `-E/--norm-compat-extended` feature to opencc-rs
 
 ### Changed
 
@@ -19,7 +20,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 - Optimized Reflow helper for handling unclosed dialog quote in standalone finalizer.
 - Reflow: Allow commas in title headings when they appear within the first 20 characters.
 - Reflow: Fixed reflow stitching when a dialog closer appears on its own line after sentence-ending punctuation.
-- Update release workflow for `opencc-rs` v0.11.4 and `opencc-jieba` v0.8.0 (updated).
+- Update release workflow for `opencc-rs` v0.11.6 and `opencc-jieba` v0.8.0 (updated).
 - Update Pdfium natives to `152.0.7961.0`.
 
 ---

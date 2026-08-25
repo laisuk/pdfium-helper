@@ -5,10 +5,10 @@ use opencc_fmmseg::{
     OpenCC, OpenccConfig,
 };
 use opencc_utils::{
-    convert_office_document, decode_input, encode_and_write_output, exit_on_error,
-    handle_pdf_with_converter, open_input_file, open_output, remove_utf8_bom, should_remove_bom,
-    validate_distinct_input_output, validate_encoding, validate_input_file, validate_output_path,
-    PdfOptions,
+    convert_office_document, decode_input, encode_and_write_output, exit_on_error, extract_pdf,
+    handle_pdf_with_converter, normalize_with, normalizing_converter, open_input_file, open_output,
+    remove_utf8_bom, should_remove_bom, validate_distinct_input_output, validate_encoding,
+    validate_input_file, validate_output_path, NormalizationMode, PdfOptions,
 };
 use std::io::{self, BufReader, IsTerminal, Read};
 use std::path::PathBuf;
@@ -181,6 +181,7 @@ fn common_args() -> Vec<Arg> {
         Arg::new("norm-compat")
             .short('n')
             .long("norm-compat")
+            .conflicts_with("norm-compat-extended")
             .action(clap::ArgAction::SetTrue)
             .help("Normalize CJK Compatibility Ideographs before conversion."),
         Arg::new("norm-compat-extended")
@@ -252,22 +253,18 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     }
 
     let input_str = decode_input(&buffer, in_enc)?;
-    let normalized_input;
-    let convert_input: &str = if matches.get_flag("norm-compat-extended") {
-        normalized_input = cc.normalize_compat_extended(&input_str);
-        &normalized_input
-    } else if matches.get_flag("norm-compat") {
-        normalized_input = cc.normalize_compat(&input_str);
-        &normalized_input
-    } else {
-        &input_str
-    };
+    let convert_input = normalize_with(
+        &input_str,
+        normalization_mode(matches),
+        |text| cc.normalize_compat(text),
+        |text| cc.normalize_compat_extended(text),
+    );
 
     if matches.get_flag("keep-ids") {
         cc.set_preserve_ids(true);
     }
 
-    let output_str = cc.convert(&convert_input, config, punctuation);
+    let output_str = cc.convert(convert_input.as_ref(), config, punctuation);
 
     let output_str = if let Some(map) = detofu_map {
         map.detofu(&output_str)
@@ -306,6 +303,7 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
         validate_output_path(path)?;
     }
     let helper = build_opencc(matches)?;
+    let normalization = normalization_mode(matches);
 
     convert_office_document(
         input_file,
@@ -315,7 +313,7 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
         convert_filename,
         config,
         punctuation,
-        |text, config, punctuation| helper.convert(text, config, punctuation),
+        normalized_converter(&helper, normalization),
     )?;
 
     Ok(())
@@ -372,30 +370,38 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         reflow,
         compact,
         header,
-        extract_only,
         pdfium_dir,
         converter_name: "Opencc-Fmmseg",
     };
 
     if extract_only {
-        return handle_pdf_with_converter(options, |_, _, _| unreachable!());
+        return extract_pdf(options);
     }
 
     let helper = build_opencc(matches)?;
-    let norm_compat = matches.get_flag("norm-compat");
-    let norm_compat_extended = matches.get_flag("norm-compat-extended");
+    let normalization = normalization_mode(matches);
 
-    handle_pdf_with_converter(options, |text, config, punctuation| {
-        if norm_compat_extended {
-            let normalized = helper.normalize_compat_extended(text);
-            helper.convert(&normalized, config, punctuation)
-        } else if norm_compat {
-            let normalized = helper.normalize_compat(text);
-            helper.convert(&normalized, config, punctuation)
-        } else {
-            helper.convert(text, config, punctuation)
-        }
-    })
+    handle_pdf_with_converter(options, normalized_converter(&helper, normalization))
+}
+
+fn normalized_converter(
+    helper: &OpenCC,
+    normalization: NormalizationMode,
+) -> impl Fn(&str, &str, bool) -> String + '_ {
+    normalizing_converter(
+        helper,
+        normalization,
+        OpenCC::normalize_compat,
+        OpenCC::normalize_compat_extended,
+        OpenCC::convert,
+    )
+}
+
+fn normalization_mode(matches: &ArgMatches) -> NormalizationMode {
+    NormalizationMode::from_flags(
+        matches.get_flag("norm-compat"),
+        matches.get_flag("norm-compat-extended"),
+    )
 }
 
 fn build_opencc(matches: &ArgMatches) -> Result<OpenCC, Box<dyn std::error::Error>> {

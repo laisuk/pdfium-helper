@@ -5,10 +5,11 @@ use opencc_jieba_rs::{
     DictSlot as DictSlotJieba, OpenCC as OpenccJieba, OpenccConfig as OpenccJiebaConfig,
 };
 use opencc_utils::{
-    convert_office_document, decode_input, encode_and_write_output, exit_on_error,
-    handle_pdf_with_converter, normalize_line_endings, open_input_file, open_output,
-    remove_utf8_bom, should_remove_bom, validate_distinct_input_output, validate_encoding,
-    validate_input_file, validate_output_path, PdfOptions,
+    convert_office_document, decode_input, encode_and_write_output, exit_on_error, extract_pdf,
+    handle_pdf_with_converter, normalize_line_endings, normalize_with, normalizing_converter,
+    open_input_file, open_output, remove_utf8_bom, should_remove_bom,
+    validate_distinct_input_output, validate_encoding, validate_input_file, validate_output_path,
+    NormalizationMode, PdfOptions,
 };
 use std::io::{self, BufRead, BufReader, IsTerminal, Read};
 use std::path::PathBuf;
@@ -44,6 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     BLUE, RESET
                 ))
                 .args(common_args())
+                .args(normalization_args())
                 .mut_arg("config", |a| a.required(true))
                 .args(enc_args()),
         )
@@ -54,6 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     BLUE, RESET
                 ))
                 .args(common_args())
+                .args(normalization_args())
                 .mut_arg("config", |a| a.required(true))
                 .arg(
                     Arg::new("format")
@@ -136,6 +139,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .action(clap::ArgAction::SetTrue)
                         .help("Disable HMM for segmentation and tagging"),
                 )
+                .args(normalization_args())
                 .arg(user_dict_arg())
                 .args(enc_args()),
         )
@@ -179,6 +183,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .value_name("dir")
                         .help("Custom Pdfium native base dir; falls back to default bundled lookup if invalid"),
                 )
+                .args(normalization_args())
                 // 👇 KEY LINE
                 .arg_required_else_help(false)
                 .mut_arg("config", |a| a.required_unless_present("extract")),
@@ -270,6 +275,22 @@ fn common_args() -> Vec<Arg> {
     ]
 }
 
+fn normalization_args() -> Vec<Arg> {
+    vec![
+        Arg::new("norm-compat")
+            .short('n')
+            .long("norm-compat")
+            .conflicts_with("norm-compat-extended")
+            .action(clap::ArgAction::SetTrue)
+            .help("Normalize CJK Compatibility Ideographs before processing"),
+        Arg::new("norm-compat-extended")
+            .short('E')
+            .long("norm-compat-extended")
+            .action(clap::ArgAction::SetTrue)
+            .help("Normalize extended Unicode compatibility forms before processing"),
+    ]
+}
+
 fn enc_args() -> Vec<Arg> {
     vec![
         Arg::new("in_enc")
@@ -307,6 +328,8 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
         }
     }
 
+    let opencc = build_opencc_jieba(matches)?;
+
     let is_console = input_file.is_none();
     let mut input: Box<dyn Read> = match input_file {
         Some(file_name) => Box::new(open_input_file(file_name)?),
@@ -325,8 +348,14 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
 
     let input_str = decode_input(&buffer, in_enc)?;
     // let opencc = OpenccJieba::new();
-    let opencc = build_opencc_jieba(matches)?;
-    let output_str = opencc.convert(&input_str, config, punctuation);
+    let convert_input = normalize_with(
+        &input_str,
+        normalization_mode(matches),
+        |text| opencc.normalize_compat(text),
+        |text| opencc.normalize_compat_extended(text),
+    );
+
+    let output_str = opencc.convert(convert_input.as_ref(), config, punctuation);
 
     let (is_console_output, mut output) = open_output(output_file)?;
 
@@ -360,6 +389,7 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
     }
     // let helper = OpenccJieba::new();
     let helper = build_opencc_jieba(matches)?;
+    let normalization = normalization_mode(matches);
     convert_office_document(
         input_file,
         output_file,
@@ -368,7 +398,7 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
         convert_filename,
         config,
         punctuation,
-        |text, config, punctuation| helper.convert(text, config, punctuation),
+        normalized_converter(&helper, normalization),
     )?;
 
     Ok(())
@@ -396,6 +426,9 @@ fn handle_segment(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
         }
     }
 
+    let mut opencc = OpenccJieba::new();
+    load_user_dict_files(&mut opencc, matches)?;
+
     let is_console = input_file.is_none();
     let mut input: Box<dyn Read> = match input_file {
         Some(file_name) => Box::new(open_input_file(file_name)?),
@@ -413,8 +446,15 @@ fn handle_segment(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     }
 
     let mut input_str = decode_input(&buffer, in_enc)?;
-    let mut opencc = OpenccJieba::new();
-    load_user_dict_files(&mut opencc, matches)?;
+
+    input_str = normalize_with(
+        &input_str,
+        normalization_mode(matches),
+        |text| opencc.normalize_compat(text),
+        |text| opencc.normalize_compat_extended(text),
+    )
+    .into_owned();
+
     if is_console {
         input_str = normalize_line_endings(&input_str);
         // Remove trailing submit newline from interactive console input
@@ -514,20 +554,38 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         reflow,
         compact,
         header,
-        extract_only,
         pdfium_dir,
         converter_name: "Opencc-Jieba",
     };
 
     if extract_only {
-        return handle_pdf_with_converter(options, |_, _, _| unreachable!());
+        return extract_pdf(options);
     }
 
     // let helper = OpenccJieba::new();
     let helper = build_opencc_jieba(matches)?;
-    handle_pdf_with_converter(options, |text, config, punctuation| {
-        helper.convert(text, config, punctuation)
-    })
+    let normalization = normalization_mode(matches);
+
+    handle_pdf_with_converter(options, normalized_converter(&helper, normalization))
+}
+fn normalized_converter(
+    helper: &OpenccJieba,
+    normalization: NormalizationMode,
+) -> impl Fn(&str, &str, bool) -> String + '_ {
+    normalizing_converter(
+        helper,
+        normalization,
+        OpenccJieba::normalize_compat,
+        OpenccJieba::normalize_compat_extended,
+        OpenccJieba::convert,
+    )
+}
+
+fn normalization_mode(matches: &ArgMatches) -> NormalizationMode {
+    NormalizationMode::from_flags(
+        matches.get_flag("norm-compat"),
+        matches.get_flag("norm-compat-extended"),
+    )
 }
 
 /// Loads all repeatable `-U/--user-dict-file` arguments into the current

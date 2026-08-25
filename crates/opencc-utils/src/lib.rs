@@ -6,6 +6,7 @@ use pdfium_helper::{
     PdfiumLibrary,
 };
 use sha2::{Digest, Sha256};
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
@@ -210,6 +211,86 @@ pub fn normalize_line_endings(s: &str) -> String {
     out
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum NormalizationMode {
+    #[default]
+    None,
+    Compat,
+    CompatExtended,
+}
+
+impl NormalizationMode {
+    pub fn from_flags(compat: bool, compat_extended: bool) -> Self {
+        if compat_extended {
+            Self::CompatExtended
+        } else if compat {
+            Self::Compat
+        } else {
+            Self::None
+        }
+    }
+}
+
+pub fn normalize_with<C, E>(
+    input: &str,
+    mode: NormalizationMode,
+    normalize_compat: C,
+    normalize_compat_extended: E,
+) -> Cow<'_, str>
+where
+    C: FnOnce(&str) -> String,
+    E: FnOnce(&str) -> String,
+{
+    match mode {
+        NormalizationMode::None => Cow::Borrowed(input),
+        NormalizationMode::Compat => Cow::Owned(normalize_compat(input)),
+        NormalizationMode::CompatExtended => Cow::Owned(normalize_compat_extended(input)),
+    }
+}
+
+pub fn normalize_and_convert_with<N, E, C>(
+    input: &str,
+    config: &str,
+    punctuation: bool,
+    mode: NormalizationMode,
+    normalize_compat: N,
+    normalize_compat_extended: E,
+    convert: C,
+) -> String
+where
+    N: FnOnce(&str) -> String,
+    E: FnOnce(&str) -> String,
+    C: FnOnce(&str, &str, bool) -> String,
+{
+    let input = normalize_with(input, mode, normalize_compat, normalize_compat_extended);
+    convert(input.as_ref(), config, punctuation)
+}
+
+pub fn normalizing_converter<T, N, E, C>(
+    engine: &T,
+    mode: NormalizationMode,
+    normalize_compat: N,
+    normalize_compat_extended: E,
+    convert: C,
+) -> impl Fn(&str, &str, bool) -> String + '_
+where
+    N: Fn(&T, &str) -> String + 'static,
+    E: Fn(&T, &str) -> String + 'static,
+    C: Fn(&T, &str, &str, bool) -> String + 'static,
+{
+    move |input, config, punctuation| {
+        normalize_and_convert_with(
+            input,
+            config,
+            punctuation,
+            mode,
+            |input| normalize_compat(engine, input),
+            |input| normalize_compat_extended(engine, input),
+            |input, config, punctuation| convert(engine, input, config, punctuation),
+        )
+    }
+}
+
 pub fn write_text_unix_newlines<P: AsRef<Path>>(path: P, s: &str) -> io::Result<()> {
     let normalized = s.replace("\r\n", "\n").replace('\r', "\n");
     std::fs::write(path, normalized.as_bytes())
@@ -248,7 +329,7 @@ where
             return Err(format!(
                 "❌  Unsupported Office extension: .{ext}. Please provide --format."
             )
-                .into());
+            .into());
         }
     };
 
@@ -318,9 +399,12 @@ pub struct PdfOptions<'a> {
     pub reflow: bool,
     pub compact: bool,
     pub header: bool,
-    pub extract_only: bool,
     pub pdfium_dir: Option<&'a String>,
     pub converter_name: &'a str,
+}
+
+pub fn extract_pdf(options: PdfOptions<'_>) -> Result<(), Box<dyn std::error::Error>> {
+    process_pdf(options, true, None)
 }
 
 pub fn handle_pdf_with_converter<F>(
@@ -330,14 +414,22 @@ pub fn handle_pdf_with_converter<F>(
 where
     F: FnMut(&str, &str, bool) -> String,
 {
+    process_pdf(options, false, Some(&mut convert_text))
+}
+
+fn process_pdf(
+    options: PdfOptions<'_>,
+    extract_only: bool,
+    convert_text: Option<&mut dyn FnMut(&str, &str, bool) -> String>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let input_norm = normalize_input_path(options.input_file);
     validate_input_file(&input_norm)?;
     let input_path = Path::new(&input_norm);
-    let final_output = default_pdf_output(input_path, options.output_file, options.extract_only);
+    let final_output = default_pdf_output(input_path, options.output_file, extract_only);
     validate_output_path(&final_output)?;
     validate_distinct_input_output(input_path, &final_output)?;
 
-    if options.extract_only {
+    if extract_only {
         println!("Extracting PDF page-by-page with PDFium (extract-only): {input_norm}");
     } else {
         println!("Extracting PDF page-by-page with PDFium: {input_norm}");
@@ -370,7 +462,7 @@ where
         extracted = reflow_cjk_paragraphs(&extracted, options.header, options.compact);
     }
 
-    if options.extract_only {
+    if extract_only {
         write_text_unix_newlines(&final_output, &extracted)?;
         eprintln!(
             "✅  PDF extracted.\n📁  Output saved to: {}",
@@ -388,6 +480,7 @@ where
         options.converter_name, config, options.punctuation
     );
 
+    let convert_text = convert_text.expect("converter is required outside extract-only mode");
     let converted = convert_text(&extracted, config, options.punctuation);
     write_text_unix_newlines(&final_output, &converted)?;
 
@@ -625,6 +718,45 @@ pub fn validate_input_file<P: AsRef<Path>>(path: P) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn normalization_mode_uses_extended_as_the_more_specific_mode() {
+        assert_eq!(
+            NormalizationMode::from_flags(false, false),
+            NormalizationMode::None
+        );
+        assert_eq!(
+            NormalizationMode::from_flags(true, false),
+            NormalizationMode::Compat
+        );
+        assert_eq!(
+            NormalizationMode::from_flags(false, true),
+            NormalizationMode::CompatExtended
+        );
+        assert_eq!(
+            NormalizationMode::from_flags(true, true),
+            NormalizationMode::CompatExtended
+        );
+    }
+
+    #[test]
+    fn normalize_with_borrows_unchanged_input_and_selects_one_normalizer() {
+        let unchanged = normalize_with(
+            "original",
+            NormalizationMode::None,
+            |_| panic!("compat normalizer should not run"),
+            |_| panic!("extended normalizer should not run"),
+        );
+        assert!(matches!(unchanged, Cow::Borrowed("original")));
+
+        let normalized = normalize_with(
+            "input",
+            NormalizationMode::Compat,
+            |_| "compat".into(),
+            |_| panic!("extended normalizer should not run"),
+        );
+        assert_eq!(normalized, "compat");
+    }
 
     #[test]
     fn validate_encoding_rejects_unknown_labels() {

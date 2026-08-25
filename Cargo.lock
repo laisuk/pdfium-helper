@@ -631,7 +631,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 [[package]]
 name = "opencc-fmmseg"
 version = "0.11.6"
-source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#49d824078fc0212c3d5e09388c25f6e5575a6060"
+source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#eedec68a29331d4a69dbdd6851ca9d2da42d6b36"
 dependencies = [
  "rayon",
  "rayon-core",
@@ -659,13 +659,14 @@ dependencies = [
 [[package]]
 name = "opencc-jieba-rs"
 version = "0.8.0"
-source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#e81032d5ceb9b05b1f557a307c9df41a51a42805"
+source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#49d59fa3cc24fb9bed13493b136613961fd92458"
 dependencies = [
  "include-flate",
  "jieba-rs",
  "rayon",
  "rayon-core",
  "regex",
+ "rustc-hash",
  "serde",
  "serde_json",
  "zstd",

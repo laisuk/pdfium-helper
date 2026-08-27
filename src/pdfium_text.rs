@@ -4,10 +4,13 @@ use crate::pdfium_loader::{PdfiumLibrary, PdfiumLoadError};
 use std::collections::HashMap;
 use std::ffi::c_char;
 use std::sync::{Mutex, OnceLock};
+use unicode_general_category::{get_general_category, GeneralCategory};
 
 type FPDF_DOCUMENT = *mut core::ffi::c_void;
 type FPDF_PAGE = *mut core::ffi::c_void;
 type FPDF_TEXTPAGE = *mut core::ffi::c_void;
+// New: Get Page Object
+type FPDF_PAGEOBJECT = *mut core::ffi::c_void;
 
 macro_rules! pdfium_fn {
     (fn($($arg:ty),*) -> $ret:ty) => { extern "C" fn($($arg),*) -> $ret };
@@ -31,6 +34,15 @@ type FPDFText_CountChars = pdfium_fn!(fn(FPDF_TEXTPAGE) -> i32);
 type FPDFText_GetText = pdfium_fn!(fn(FPDF_TEXTPAGE, i32, i32, *mut u16) -> i32);
 // ✅ NEW:
 type FPDF_GetLastError = pdfium_fn!(fn() -> u32);
+
+// New:
+type FPDFPage_CountObjects = pdfium_fn!(fn(FPDF_PAGE) -> i32);
+type FPDFPage_GetObject = pdfium_fn!(fn(FPDF_PAGE, i32) -> FPDF_PAGEOBJECT);
+type FPDFPageObj_GetType = pdfium_fn!(fn(FPDF_PAGEOBJECT) -> i32);
+type FPDFPageObj_GetBounds =
+    pdfium_fn!(fn(FPDF_PAGEOBJECT, *mut f32, *mut f32, *mut f32, *mut f32) -> i32);
+
+type FPDFTextObj_GetText = pdfium_fn!(fn(FPDF_PAGEOBJECT, FPDF_TEXTPAGE, *mut u16, usize) -> usize);
 
 #[derive(Debug, thiserror::Error)]
 pub enum PdfiumExtractError {
@@ -148,15 +160,25 @@ struct PdfiumFns {
     init: FPDF_InitLibrary,
     #[allow(dead_code)]
     destroy: FPDF_DestroyLibrary,
+
     load_document: FPDF_LoadDocument,
     close_document: FPDF_CloseDocument,
+
     get_page_count: FPDF_GetPageCount,
     load_page: FPDF_LoadPage,
     close_page: FPDF_ClosePage,
+
+    page_count_objects: FPDFPage_CountObjects,
+    page_get_object: FPDFPage_GetObject,
+    page_obj_get_type: FPDFPageObj_GetType,
+    page_obj_get_bounds: FPDFPageObj_GetBounds,
+
     text_load_page: FPDFText_LoadPage,
     text_close_page: FPDFText_ClosePage,
     text_count_chars: FPDFText_CountChars,
     text_get_text: FPDFText_GetText,
+    text_obj_get_text: FPDFTextObj_GetText,
+
     get_last_error: FPDF_GetLastError, // ✅ NEW
 }
 
@@ -180,10 +202,18 @@ fn resolved_fns(lib: &PdfiumLibrary) -> Result<PdfiumFns, PdfiumLoadError> {
             get_page_count: lib.get(b"FPDF_GetPageCount\0")?,
             load_page: lib.get(b"FPDF_LoadPage\0")?,
             close_page: lib.get(b"FPDF_ClosePage\0")?,
+
+            page_count_objects: lib.get(b"FPDFPage_CountObjects\0")?,
+            page_get_object: lib.get(b"FPDFPage_GetObject\0")?,
+            page_obj_get_type: lib.get(b"FPDFPageObj_GetType\0")?,
+            page_obj_get_bounds: lib.get(b"FPDFPageObj_GetBounds\0")?,
+
             text_load_page: lib.get(b"FPDFText_LoadPage\0")?,
             text_close_page: lib.get(b"FPDFText_ClosePage\0")?,
             text_count_chars: lib.get(b"FPDFText_CountChars\0")?,
             text_get_text: lib.get(b"FPDFText_GetText\0")?,
+            text_obj_get_text: lib.get(b"FPDFTextObj_GetText\0")?,
+
             get_last_error: lib.get(b"FPDF_GetLastError\0")?,
         }
     };
@@ -236,6 +266,217 @@ fn decode_pdfium_u16(buf: &[u16], extracted: i32) -> String {
     compress_newlines(&text)
 }
 
+// Text Object Start
+
+fn get_text_from_text_object(
+    fns: &PdfiumFns,
+    text_obj: FPDF_PAGEOBJECT,
+    text_page: FPDF_TEXTPAGE,
+) -> String {
+    let required_bytes = (fns.text_obj_get_text)(text_obj, text_page, std::ptr::null_mut(), 0);
+
+    if required_bytes == 0 {
+        return String::new();
+    }
+
+    let u16_count = (required_bytes + 1) / 2;
+
+    if u16_count <= 1 || u16_count > 10_000_000 {
+        return String::new();
+    }
+
+    let mut buf = vec![0u16; u16_count];
+
+    let written_bytes =
+        (fns.text_obj_get_text)(text_obj, text_page, buf.as_mut_ptr(), required_bytes);
+
+    if written_bytes == 0 {
+        return String::new();
+    }
+
+    let mut len = written_bytes / 2;
+
+    if len == 0 {
+        return String::new();
+    }
+
+    if buf[len - 1] == 0 {
+        len -= 1;
+    }
+
+    if len == 0 {
+        return String::new();
+    }
+
+    String::from_utf16_lossy(&buf[..len])
+}
+
+fn bucket_y(y_mid: f32) -> i32 {
+    const Y_BAND_STEP: f32 = 5.0;
+    (y_mid / Y_BAND_STEP).floor() as i32
+}
+
+fn normalize_whitespace(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut last_was_ws = false;
+
+    for ch in s.chars() {
+        if ch.is_whitespace() {
+            if !last_was_ws {
+                out.push(' ');
+                last_was_ws = true;
+            }
+        } else {
+            out.push(ch);
+            last_was_ws = false;
+        }
+    }
+
+    out.trim().to_string()
+}
+
+fn is_untrusted_overlay(norm: &str, repeat_count: usize) -> bool {
+    if is_punctuation_or_symbol_only(norm) {
+        return false;
+    }
+    repeat_count > 4 && norm.chars().count() >= 3 && norm.chars().count() <= 200
+}
+
+struct TextObjItem {
+    raw: String,
+    norm: String,
+    y_bucket: i32,
+}
+
+fn extract_page_text_ignore_untrusted(
+    fns: &PdfiumFns,
+    page: FPDF_PAGE,
+    text_page: FPDF_TEXTPAGE,
+) -> String {
+    const FPDF_PAGEOBJ_TEXT: i32 = 1;
+
+    let obj_count = (fns.page_count_objects)(page);
+
+    if obj_count <= 0 {
+        return String::new();
+    }
+
+    let mut items = Vec::with_capacity((obj_count as usize).min(2048));
+
+    for i in 0..obj_count {
+        let obj = (fns.page_get_object)(page, i);
+
+        if obj.is_null() {
+            continue;
+        }
+
+        if (fns.page_obj_get_type)(obj) != FPDF_PAGEOBJ_TEXT {
+            continue;
+        }
+
+        let raw = get_text_from_text_object(fns, obj, text_page);
+
+        if raw.trim().is_empty() {
+            continue;
+        }
+
+        let mut left = 0.0f32;
+        let mut bottom = 0.0f32;
+        let mut right = 0.0f32;
+        let mut top = 0.0f32;
+
+        let y_bucket =
+            if (fns.page_obj_get_bounds)(obj, &mut left, &mut bottom, &mut right, &mut top) != 0 {
+                let y_mid = (bottom + top) * 0.5;
+                bucket_y(y_mid)
+            } else {
+                0
+            };
+
+        let norm = normalize_whitespace(&raw);
+
+        if norm.is_empty() {
+            continue;
+        }
+
+        items.push(TextObjItem {
+            raw,
+            norm,
+            y_bucket,
+        });
+    }
+
+    if items.is_empty() {
+        return String::new();
+    }
+
+    let mut freq: HashMap<(String, i32), usize> = HashMap::with_capacity(items.len());
+
+    for item in &items {
+        *freq.entry((item.norm.clone(), item.y_bucket)).or_insert(0) += 1;
+    }
+
+    const LINE_BUCKET_GAP: i32 = 3;
+
+    let mut out = String::new();
+    let mut last_bucket: Option<i32> = None;
+
+    for item in items {
+        let repeats = freq
+            .get(&(item.norm.clone(), item.y_bucket))
+            .copied()
+            .unwrap_or(0);
+
+        if is_untrusted_overlay(&item.norm, repeats) {
+            continue;
+        }
+
+        if let Some(last) = last_bucket {
+            if (item.y_bucket - last).abs() >= LINE_BUCKET_GAP {
+                out.push('\n');
+            }
+        }
+
+        out.push_str(&item.raw);
+        last_bucket = Some(item.y_bucket);
+    }
+
+    out
+}
+
+fn is_punctuation_or_symbol_only(s: &str) -> bool {
+    let mut saw_char = false;
+
+    for ch in s.chars() {
+        if ch.is_whitespace() {
+            continue;
+        }
+
+        saw_char = true;
+
+        if !matches!(
+            get_general_category(ch),
+            GeneralCategory::ConnectorPunctuation
+                | GeneralCategory::DashPunctuation
+                | GeneralCategory::OpenPunctuation
+                | GeneralCategory::ClosePunctuation
+                | GeneralCategory::InitialPunctuation
+                | GeneralCategory::FinalPunctuation
+                | GeneralCategory::OtherPunctuation
+                | GeneralCategory::MathSymbol
+                | GeneralCategory::CurrencySymbol
+                | GeneralCategory::ModifierSymbol
+                | GeneralCategory::OtherSymbol
+        ) {
+            return false;
+        }
+    }
+
+    saw_char
+}
+
+// text Object End
+
 /// Matches `_normalize_page_text()` behavior. :contentReference[oaicite:8]{index=8}
 fn normalize_page_text(s: String) -> String {
     if s.trim().is_empty() {
@@ -256,7 +497,8 @@ static PDFIUM_INIT_ONCE: OnceLock<()> = OnceLock::new();
 pub fn extract_pdf_pages_with_callback_pdfium<F>(
     lib: &PdfiumLibrary,
     path: &str,
-    add_page_header: bool, // ✅ new
+    add_page_header: bool,           // ✅ new
+    ignore_untrusted_pdf_text: bool, // ✅ new
     mut callback: F,
 ) -> Result<(), PdfiumExtractError>
 where
@@ -321,14 +563,19 @@ where
             continue;
         }
 
-        let count = (fns.text_count_chars)(text_page);
-
-        let raw = if count > 0 {
-            let mut buf = vec![0u16; (count as usize) + 1];
-            let extracted = (fns.text_get_text)(text_page, 0, count, buf.as_mut_ptr());
-            decode_pdfium_u16(&buf, extracted)
+        let raw = if ignore_untrusted_pdf_text {
+            extract_page_text_ignore_untrusted(&fns, page, text_page)
         } else {
-            String::new()
+            let count = (fns.text_count_chars)(text_page);
+
+            if count > 0 {
+                let mut buf = vec![0u16; (count as usize) + 1];
+                let extracted = (fns.text_get_text)(text_page, 0, count, buf.as_mut_ptr());
+
+                decode_pdfium_u16(&buf, extracted)
+            } else {
+                String::new()
+            }
         };
 
         (fns.text_close_page)(text_page);
@@ -354,15 +601,24 @@ pub fn extract_pdf_text_pdfium(
     lib: &PdfiumLibrary,
     path: &str,
     add_page_header: bool,
+    ignore_untrusted_pdf_text: bool,
 ) -> Result<String, PdfiumExtractError> {
     let mut out = String::new();
-    extract_pdf_pages_with_callback_pdfium(lib, path, add_page_header, |_, _, s| out.push_str(s))?;
+
+    extract_pdf_pages_with_callback_pdfium(
+        lib,
+        path,
+        add_page_header,
+        ignore_untrusted_pdf_text,
+        |_, _, s| out.push_str(s),
+    )?;
+
     Ok(out)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_page_text;
+    use super::{is_punctuation_or_symbol_only, is_untrusted_overlay, normalize_page_text};
 
     #[test]
     fn normalize_page_text_preserves_leading_indentation() {
@@ -375,5 +631,54 @@ mod tests {
     fn normalize_page_text_keeps_blank_page_marker() {
         let out = normalize_page_text("   \n\n\t".to_string());
         assert_eq!(out, "\n");
+    }
+
+    #[test]
+    fn repeated_punctuation_is_not_untrusted_overlay() {
+        assert!(!is_untrusted_overlay("...", 4));
+        assert!(!is_untrusted_overlay("......", 6));
+        assert!(!is_untrusted_overlay("……", 10));
+        assert!(!is_untrusted_overlay("！！！", 10));
+        assert!(!is_untrusted_overlay("？？？", 10));
+    }
+
+    #[test]
+    fn repeated_punctuation_and_symbols_are_not_untrusted_overlay() {
+        // ASCII punctuation.
+        assert!(!is_untrusted_overlay("...", 4));
+        assert!(!is_untrusted_overlay("......", 6));
+        assert!(!is_untrusted_overlay("------", 10));
+
+        // CJK / Unicode punctuation.
+        assert!(!is_untrusted_overlay("……", 10));
+        assert!(!is_untrusted_overlay("！！！", 10));
+        assert!(!is_untrusted_overlay("？？？", 10));
+        assert!(!is_untrusted_overlay("。。。。。。", 10));
+
+        // Box drawing.
+        assert!(!is_untrusted_overlay("────────", 10));
+        assert!(!is_untrusted_overlay("════════", 10));
+        assert!(!is_untrusted_overlay("┼┼┼┼┼┼", 10));
+
+        // Other symbols.
+        assert!(!is_untrusted_overlay("★★★★★★", 10));
+        assert!(!is_untrusted_overlay("■■■■■■", 10));
+        assert!(!is_untrusted_overlay("→→→→→→", 10));
+
+        // Actual repeated text must still be rejected.
+        assert!(is_untrusted_overlay("萌主推剧", 6));
+    }
+
+    #[test]
+    fn punctuation_or_symbol_only_requires_no_text() {
+        assert!(is_punctuation_or_symbol_only("......"));
+        assert!(is_punctuation_or_symbol_only("……！？"));
+        assert!(is_punctuation_or_symbol_only("─┼─┼─"));
+        assert!(is_punctuation_or_symbol_only("★ → ■"));
+
+        assert!(!is_punctuation_or_symbol_only(""));
+        assert!(!is_punctuation_or_symbol_only("   "));
+        assert!(!is_punctuation_or_symbol_only("萌主推剧"));
+        assert!(!is_punctuation_or_symbol_only("萌主......"));
     }
 }

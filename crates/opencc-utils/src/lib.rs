@@ -399,6 +399,7 @@ pub struct PdfOptions<'a> {
     pub reflow: bool,
     pub compact: bool,
     pub header: bool,
+    pub ignore_untrusted_pdf_text: bool,
     pub pdfium_dir: Option<&'a String>,
     pub converter_name: &'a str,
 }
@@ -442,6 +443,7 @@ fn process_pdf(
         &pdfium,
         &input_norm,
         options.header,
+        options.ignore_untrusted_pdf_text,
         |page, total, text| {
             pdfium_helper::print_progress(page, total, text);
             pages.push(text.to_owned());

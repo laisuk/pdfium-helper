@@ -178,6 +178,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .help("Extract text from PDF document only (default: false)"),
                 )
                 .arg(
+                    Arg::new("ignore-untrusted-text")
+                        .long("ignore-untrusted-text")
+                        .action(clap::ArgAction::SetTrue)
+                        .help("Ignore repeated untrusted PDF text overlays during extraction"),
+                )
+                .arg(
                     Arg::new("pdfium")
                         .long("pdfium")
                         .value_name("dir")
@@ -531,6 +537,7 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let header = matches.get_flag("header");
     let extract_only = matches.get_flag("extract");
     let pdfium_dir = matches.get_one::<String>("pdfium");
+    let ignore_untrusted_pdf_text = matches.get_flag("ignore-untrusted-text");
     let config = if extract_only {
         None
     } else {
@@ -554,6 +561,7 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         reflow,
         compact,
         header,
+        ignore_untrusted_pdf_text,
         pdfium_dir,
         converter_name: "Opencc-Jieba",
     };

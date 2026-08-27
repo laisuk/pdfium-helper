@@ -2,8 +2,8 @@ use pdfium_helper::{extract_pdf_pages_with_callback_pdfium, PdfiumLibrary};
 
 fn main() -> anyhow::Result<()> {
     // input_file = "tests/My_Golden_Blood.pdf";
-    let input_file = "tests/盗墓笔记.pdf";
-    let output_file = "tests/盗墓笔记_extracted.txt";
+    let input_file = "tests/samples/SanWenHant.pdf";
+    let output_file = "tests/samples/SanWenHant_extracted.txt";
 
     println!("Extracting PDF page-by-page with PDFium: {input_file}");
 
@@ -19,7 +19,7 @@ fn main() -> anyhow::Result<()> {
 
     let mut pages: Vec<String> = Vec::new();
 
-    extract_pdf_pages_with_callback_pdfium(&pdfium, input_file, false, |page, total, text| {
+    extract_pdf_pages_with_callback_pdfium(&pdfium, input_file, false, false, |page, total, text| {
         // let percent = page * 100 / total.max(1);
         //
         // let msg = format!(

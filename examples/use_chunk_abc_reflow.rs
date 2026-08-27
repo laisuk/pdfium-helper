@@ -5,8 +5,8 @@ use std::path::Path;
 use pdfium_helper::reflow_cjk_paragraphs;
 
 fn main() -> anyhow::Result<()> {
-    let input_file = "tests/chunk_ABC.txt";
-    let output_file = "tests/chunk_ABC_reflowed.txt";
+    let input_file = "tests/samples/chunk_ABC.txt";
+    let output_file = "tests/samples/chunk_ABC_reflowed.txt";
 
     // 1) Read raw text from input file (UTF-8)
     println!("Reading text from: {input_file}");

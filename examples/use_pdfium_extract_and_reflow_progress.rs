@@ -5,8 +5,8 @@ use pdfium_helper::{extract_pdf_pages_with_callback_pdfium, reflow_cjk_paragraph
 
 fn main() -> anyhow::Result<()> {
     // input_file = "tests/My_Golden_Blood.pdf";
-    let input_file = "tests/盗墓笔记.pdf";
-    let output_file = "tests/盗墓笔记_extracted.txt";
+    let input_file = "tests/samples/SanWenHant.pdf";
+    let output_file = "tests/samples/SanWenHant_extracted.txt";
 
     println!("Extracting PDF page-by-page with PDFium: {input_file}");
 
@@ -17,7 +17,7 @@ fn main() -> anyhow::Result<()> {
     let mut pages: Vec<String> = Vec::new();
 
     // Page-by-page extraction with progress
-    extract_pdf_pages_with_callback_pdfium(&pdfium, input_file, false, |page, total, text| {
+    extract_pdf_pages_with_callback_pdfium(&pdfium, input_file, false, false, |page, total, text| {
         pdfium_helper::print_progress(page, total, text);
         pages.push(text.to_owned());
     })?;

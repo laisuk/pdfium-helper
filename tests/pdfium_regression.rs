@@ -57,7 +57,7 @@ fn global_pdfium_loader_returns_same_instance_and_path() {
 fn extract_chunk_abc_matches_current_golden_output() {
     let _guard = extraction_lock();
     let pdfium = load_pdfium();
-    let pdf_path = fixture_path("tests/CHUNK_ABC.pdf");
+    let pdf_path = fixture_path("tests/samples/CHUNK_ABC.pdf");
 
     let extracted = extract_pdf_text_pdfium(
         pdfium,
@@ -65,11 +65,12 @@ fn extract_chunk_abc_matches_current_golden_output() {
             .to_str()
             .unwrap_or_else(|| panic!("non-utf8 test path: {}", pdf_path.display())),
         false,
+        false,
     )
     .unwrap_or_else(|e| panic!("failed to extract {}: {e}", pdf_path.display()));
 
     let actual = normalize_newlines(&extracted);
-    let expected = normalize_newlines(&read_fixture("tests/CHUNK_ABC_extracted.txt"));
+    let expected = normalize_newlines(&read_fixture("tests/samples/CHUNK_ABC_extracted.txt"));
 
     assert_eq!(actual, expected);
     assert!(actual.contains("=== [Page 2/10] ==="));
@@ -80,8 +81,8 @@ fn extract_chunk_abc_matches_current_golden_output() {
 
 #[test]
 fn reflow_chunk_abc_matches_current_golden_output() {
-    let input = read_fixture("tests/CHUNK_ABC_extracted.txt");
-    let expected = normalize_newlines(&read_fixture("tests/CHUNK_ABC_reflowed.txt"));
+    let input = read_fixture("tests/samples/CHUNK_ABC_extracted.txt");
+    let expected = normalize_newlines(&read_fixture("tests/samples/CHUNK_ABC_reflowed.txt"));
 
     let actual = reflow_cjk_paragraphs(&input, false, false);
 
@@ -92,25 +93,31 @@ fn reflow_chunk_abc_matches_current_golden_output() {
 fn extract_chunk_abc_callback_output_matches_full_text_api() {
     let _guard = extraction_lock();
     let pdfium = load_pdfium();
-    let pdf_path = fixture_path("tests/CHUNK_ABC.pdf");
+    let pdf_path = fixture_path("tests/samples/CHUNK_ABC.pdf");
     let pdf_path_str = pdf_path
         .to_str()
         .unwrap_or_else(|| panic!("non-utf8 test path: {}", pdf_path.display()));
 
     let mut callback_pages = Vec::new();
     let mut callback_progress = Vec::new();
-    extract_pdf_pages_with_callback_pdfium(pdfium, pdf_path_str, false, |page, total, text| {
-        assert!(page >= 1);
-        assert!(total >= page);
-        callback_progress.push((page, total));
-        callback_pages.push(text.to_owned());
-    })
+    extract_pdf_pages_with_callback_pdfium(
+        pdfium,
+        pdf_path_str,
+        false,
+        false,
+        |page, total, text| {
+            assert!(page >= 1);
+            assert!(total >= page);
+            callback_progress.push((page, total));
+            callback_pages.push(text.to_owned());
+        },
+    )
     .unwrap_or_else(|e| panic!("callback extraction failed for {}: {e}", pdf_path.display()));
 
     assert_eq!(callback_progress, vec![(1, 3), (2, 3), (3, 3)]);
 
     let via_callback = callback_pages.concat();
-    let via_full_text = extract_pdf_text_pdfium(pdfium, pdf_path_str, false)
+    let via_full_text = extract_pdf_text_pdfium(pdfium, pdf_path_str, false,false)
         .unwrap_or_else(|e| panic!("full extraction failed for {}: {e}", pdf_path.display()));
 
     assert_eq!(
@@ -123,14 +130,14 @@ fn extract_chunk_abc_callback_output_matches_full_text_api() {
 fn repeated_extraction_via_global_loader_is_stable() {
     let _guard = extraction_lock();
     let pdfium = load_pdfium();
-    let pdf_path = fixture_path("tests/CHUNK_ABC.pdf");
+    let pdf_path = fixture_path("tests/samples/CHUNK_ABC.pdf");
     let pdf_path_str = pdf_path
         .to_str()
         .unwrap_or_else(|| panic!("non-utf8 test path: {}", pdf_path.display()));
-    let expected = normalize_newlines(&read_fixture("tests/CHUNK_ABC_extracted.txt"));
+    let expected = normalize_newlines(&read_fixture("tests/samples/CHUNK_ABC_extracted.txt"));
 
     for round in 0..3 {
-        let extracted = extract_pdf_text_pdfium(pdfium, pdf_path_str, false)
+        let extracted = extract_pdf_text_pdfium(pdfium, pdf_path_str, false, false)
             .unwrap_or_else(|e| panic!("repeated extraction round {round} failed: {e}"));
         assert_eq!(normalize_newlines(&extracted), expected);
     }
@@ -138,8 +145,8 @@ fn repeated_extraction_via_global_loader_is_stable() {
 
 #[test]
 fn reflow_yi_zuo_fei_matches_current_golden_text() {
-    let input = read_fixture("tests/yi_zuo_fei.txt");
-    let expected = normalize_newlines(&read_fixture("tests/yi_zuo_fei_reflowed.txt"));
+    let input = read_fixture("tests/samples/yi_zuo_fei.txt");
+    let expected = normalize_newlines(&read_fixture("tests/samples/yi_zuo_fei_reflowed.txt"));
 
     let actual = reflow_cjk_paragraphs(&input, false, false);
 
@@ -150,7 +157,7 @@ fn reflow_yi_zuo_fei_matches_current_golden_text() {
 fn extract_jiamianyouxi_smoke_test_produces_non_empty_pages() {
     let _guard = extraction_lock();
     let pdfium = load_pdfium();
-    let pdf_path = fixture_path("tests/SanWenHant.pdf");
+    let pdf_path = fixture_path("tests/samples/SanWenHant.pdf");
     let pdf_path_str = pdf_path
         .to_str()
         .unwrap_or_else(|| panic!("non-utf8 test path: {}", pdf_path.display()));
@@ -159,7 +166,7 @@ fn extract_jiamianyouxi_smoke_test_produces_non_empty_pages() {
     let mut non_empty_pages = 0usize;
     let mut total_chars = 0usize;
 
-    extract_pdf_pages_with_callback_pdfium(pdfium, pdf_path_str, false, |page, total, text| {
+    extract_pdf_pages_with_callback_pdfium(pdfium, pdf_path_str, false, false, |page, total, text| {
         assert!(page >= 1);
         assert!(total >= page);
         page_count += 1;

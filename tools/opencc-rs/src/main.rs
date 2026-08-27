@@ -109,6 +109,12 @@ fn main() {
                         .help("Extract text from PDF document only (default: false)"),
                 )
                 .arg(
+                    Arg::new("ignore-untrusted-text")
+                        .long("ignore-untrusted-text")
+                        .action(clap::ArgAction::SetTrue)
+                        .help("Ignore repeated untrusted PDF text overlays during extraction"),
+                )
+                .arg(
                     Arg::new("pdfium")
                         .long("pdfium")
                         .value_name("dir")
@@ -346,6 +352,7 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let compact = matches.get_flag("compact");
     let header = matches.get_flag("header");
     let extract_only = matches.get_flag("extract");
+    let ignore_untrusted_pdf_text = matches.get_flag("ignore-untrusted-text");
     let pdfium_dir = matches.get_one::<String>("pdfium");
     let config = if extract_only {
         None
@@ -370,6 +377,7 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         reflow,
         compact,
         header,
+        ignore_untrusted_pdf_text,
         pdfium_dir,
         converter_name: "Opencc-Fmmseg",
     };
@@ -522,5 +530,30 @@ mod tests {
     #[test]
     fn custom_dict_specs_reject_empty_paths() {
         assert!(parse_custom_dict_spec("STPhrases:append:   ").is_err());
+    }
+
+    #[test]
+    fn pdf_cli_exposes_ignore_untrusted_text_flag() {
+        let cmd = Command::new("opencc-rs")
+            .subcommand(
+                Command::new("pdf")
+                    .args(common_args())
+                    .arg(
+                        Arg::new("ignore-untrusted-text")
+                            .long("ignore-untrusted-text")
+                            .action(clap::ArgAction::SetTrue),
+                    ),
+            );
+
+        let matches = cmd
+            .try_get_matches_from([
+                "opencc-rs",
+                "pdf",
+                "--ignore-untrusted-text",
+            ])
+            .unwrap();
+
+        let (_, pdf) = matches.subcommand().unwrap();
+        assert!(pdf.get_flag("ignore-untrusted-text"));
     }
 }

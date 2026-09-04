@@ -274,7 +274,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (pdfium, _path) = PdfiumLibrary::load_with_fallbacks()?;
     let input_path = "document.pdf";
 
-    extract_pdf_pages_with_callback_pdfium(&pdfium, input_path, false, |page, total, text| {
+    extract_pdf_pages_with_callback_pdfium(&pdfium, input_path, false, false, |page, total, text| {
         println!("page {page}/{total}: {} chars", text.chars().count());
     })?;
 

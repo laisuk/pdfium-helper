@@ -308,6 +308,7 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
     if let Some(path) = output_file {
         validate_output_path(path)?;
     }
+    let detofu_map = build_detofu_map(matches)?;
     let helper = build_opencc(matches)?;
     let normalization = normalization_mode(matches);
 
@@ -319,7 +320,7 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
         convert_filename,
         config,
         punctuation,
-        normalized_converter(&helper, normalization),
+        cli_text_converter(&helper, normalization, detofu_map.as_ref()),
     )?;
 
     Ok(())
@@ -386,23 +387,37 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
         return extract_pdf(options);
     }
 
+    let detofu_map = build_detofu_map(matches)?;
     let helper = build_opencc(matches)?;
     let normalization = normalization_mode(matches);
 
-    handle_pdf_with_converter(options, normalized_converter(&helper, normalization))
+    handle_pdf_with_converter(
+        options,
+        cli_text_converter(&helper, normalization, detofu_map.as_ref()),
+    )
 }
 
-fn normalized_converter(
-    helper: &OpenCC,
+fn cli_text_converter<'a>(
+    helper: &'a OpenCC,
     normalization: NormalizationMode,
-) -> impl Fn(&str, &str, bool) -> String + '_ {
-    normalizing_converter(
+    detofu_map: Option<&'a DetofuMap>,
+) -> impl Fn(&str, &str, bool) -> String + 'a {
+    let converter = normalizing_converter(
         helper,
         normalization,
         OpenCC::normalize_compat,
         OpenCC::normalize_compat_extended,
         OpenCC::convert,
-    )
+    );
+
+    move |input, config, punctuation| {
+        let converted = converter(input, config, punctuation);
+
+        match detofu_map {
+            Some(map) => map.detofu(&converted),
+            None => converted,
+        }
+    }
 }
 
 fn normalization_mode(matches: &ArgMatches) -> NormalizationMode {
@@ -497,14 +512,12 @@ mod tests {
         let dictionary = DictionaryMaxlength::from_zstd().unwrap();
         let (traditional, hong_kong) = dictionary
             .hk_phrases
-            .map
             .iter()
             .next()
             .map(|(source, target)| (source.iter().collect::<String>(), target.to_string()))
             .expect("the built-in HKPhrases dictionary should not be empty");
         let (hong_kong_reverse, traditional_reverse) = dictionary
             .hk_phrases_rev
-            .map
             .iter()
             .next()
             .map(|(source, target)| (source.iter().collect::<String>(), target.to_string()))

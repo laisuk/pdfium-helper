@@ -36,7 +36,7 @@ libloading = "=0.8"
 thiserror = "2.0"
 anyhow = "1.0"
 smallvec = "=1.15"
-zstd = "0.13"
+zstd = "0.14"
 regex = "1.13"
 unicode-general-category = "1"
 

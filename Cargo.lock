@@ -631,7 +631,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 [[package]]
 name = "opencc-fmmseg"
 version = "0.12.0"
-source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#35e1a39a7d15c660da6b9573b792e249db4db222"
+source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#cd51ed4e3e5ea8910a701f0de1110d0dae97721b"
 dependencies = [
  "rayon",
  "rayon-core",
@@ -659,7 +659,7 @@ dependencies = [
 [[package]]
 name = "opencc-jieba-rs"
 version = "0.8.1"
-source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#7b985d307eb6af9178b537faedd595ad0e9a70ee"
+source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#85e5782c99535f44d2e26df1cefefce718d23e72"
 dependencies = [
  "include-flate",
  "jieba-rs",

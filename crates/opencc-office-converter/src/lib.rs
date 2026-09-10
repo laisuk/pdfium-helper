@@ -321,8 +321,7 @@ impl OfficeConverter {
                 let mut entry = zin.by_index(mi)?;
                 let name = entry.name().replace('\\', "/");
 
-                if !Self::is_unsafe_path(Path::new(&name)) && !entry.is_dir() && name == "mimetype"
-                {
+                if !Self::is_unsafe_zip_name(&name) && !entry.is_dir() && name == "mimetype" {
                     let mut buf = Vec::new();
                     entry.read_to_end(&mut buf)?;
 
@@ -343,7 +342,7 @@ impl OfficeConverter {
             let mut entry = zin.by_index(i)?;
             let name = entry.name().replace('\\', "/");
 
-            if Self::is_unsafe_path(Path::new(&name)) {
+            if Self::is_unsafe_zip_name(&name) {
                 continue;
             }
 
@@ -500,7 +499,8 @@ impl OfficeConverter {
                     || lower.starts_with("ppt/notesslides/")
                     || lower.starts_with("ppt/slidemasters/")
                     || lower.starts_with("ppt/slidelayouts/")
-                    || lower.contains("/comment")
+                    || lower.starts_with("ppt/comments/")
+                    || lower == "ppt/commentauthors.xml"
             }
             "odt" | "ods" | "odp" => lower == "content.xml",
             "epub" => {
@@ -599,13 +599,19 @@ impl OfficeConverter {
         Ok(None)
     }
 
-    fn is_unsafe_path(path: &Path) -> bool {
-        path.components().any(|c| {
-            matches!(
-                c,
-                std::path::Component::ParentDir | std::path::Component::RootDir
-            )
-        })
+    /// Returns whether a ZIP entry name could escape the archive root.
+    ///
+    /// ZIP entry names are archive paths rather than native filesystem paths, so
+    /// validate both slash styles explicitly. This rejects Unix-style absolute
+    /// paths, Windows-style rooted/drive-prefixed paths, and any `..` component.
+    #[inline]
+    fn is_unsafe_zip_name(name: &str) -> bool {
+        name.starts_with('/')
+            || name.starts_with('\\')
+            || (name.len() >= 3
+                && name.as_bytes()[1] == b':'
+                && matches!(name.as_bytes()[2], b'/' | b'\\'))
+            || name.split(['/', '\\']).any(|part| part == "..")
     }
 
     fn mask_font(xml: &mut String, format: &str, font_map: &mut HashMap<String, String>) {
@@ -975,6 +981,56 @@ mod tests {
             assert!(
                 content.contains("汉语"),
                 "expected untouched text in {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_pptx_comment_matching_is_precise() {
+        assert!(OfficeConverter::is_target_entry(
+            "pptx",
+            "ppt/comments/comment1.xml"
+        ));
+        assert!(OfficeConverter::is_target_entry(
+            "pptx",
+            "ppt/commentAuthors.xml"
+        ));
+
+        assert!(!OfficeConverter::is_target_entry(
+            "pptx",
+            "ppt/commentary/comment1.xml"
+        ));
+        assert!(!OfficeConverter::is_target_entry(
+            "pptx",
+            "ppt/foo/commentMetadata.xml"
+        ));
+    }
+
+    #[test]
+    fn test_unsafe_zip_name_detection() {
+        for name in [
+            "../word/document.xml",
+            "word/../../document.xml",
+            "/word/document.xml",
+            "\\word\\document.xml",
+            "C:/word/document.xml",
+            "C:\\word\\document.xml",
+        ] {
+            assert!(
+                OfficeConverter::is_unsafe_zip_name(name),
+                "expected unsafe ZIP entry name: {name}"
+            );
+        }
+
+        for name in [
+            "word/document.xml",
+            "ppt/comments/comment1.xml",
+            "EPUB/content.xhtml",
+            "folder..name/file.xml",
+        ] {
+            assert!(
+                !OfficeConverter::is_unsafe_zip_name(name),
+                "expected safe ZIP entry name: {name}"
             );
         }
     }

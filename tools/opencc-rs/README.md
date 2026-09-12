@@ -202,6 +202,31 @@ target/release/opencc-rs pdf -i book.pdf -c s2t -p -r
 
 ---
 
+## Text conversion pipeline
+
+`convert`, `office`, and `pdf` use one configured pipeline:
+
+1. Optional normalization with `-n/--norm-compat` or `-E/--norm-compat-extended`.
+2. OpenCC conversion using the selected config, punctuation setting, and loaded custom dictionaries.
+3. Optional DeTofu fallback.
+
+Office/EPUB content and automatically generated filename stems (`-F`) use this same pipeline.
+PDF conversion applies it after extraction and optional reflow. `pdf --extract` skips conversion entirely
+and does not require `-c` or construct a conversion engine.
+
+`--detofu [LEVEL]` retains its existing level parsing; omitting LEVEL selects `all` (Extension B onward).
+Supported levels are `all`, `ext-c`, `ext-d`, `ext-e`, `ext-f`, `ext-g`, `ext-h`, and `ext-i`.
+`--detofu-file FILE` requires `--detofu` and loads custom mappings that override built-in mappings.
+These options also apply to filename conversion with `-F`. `convert --keep-ids` continues to preserve IDS expressions
+in the OpenCC conversion step, and `-D` custom dictionaries remain part of engine setup.
+
+```bash
+opencc-rs office -c s2t -i book.epub -F -E --detofu
+opencc-rs convert -c t2s -i input.txt -o output.txt --detofu ext-c --detofu-file fallback.txt
+```
+
+---
+
 ## Development
 
 ```text
@@ -270,5 +295,4 @@ This project is licensed under the **MIT License**.
 - OpenCC project
 - PDFium project
 - opencc-fmmseg project
-
 

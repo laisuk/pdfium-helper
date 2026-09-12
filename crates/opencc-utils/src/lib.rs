@@ -248,49 +248,6 @@ where
     }
 }
 
-pub fn normalize_and_convert_with<N, E, C>(
-    input: &str,
-    config: &str,
-    punctuation: bool,
-    mode: NormalizationMode,
-    normalize_compat: N,
-    normalize_compat_extended: E,
-    convert: C,
-) -> String
-where
-    N: FnOnce(&str) -> String,
-    E: FnOnce(&str) -> String,
-    C: FnOnce(&str, &str, bool) -> String,
-{
-    let input = normalize_with(input, mode, normalize_compat, normalize_compat_extended);
-    convert(input.as_ref(), config, punctuation)
-}
-
-pub fn normalizing_converter<T, N, E, C>(
-    engine: &T,
-    mode: NormalizationMode,
-    normalize_compat: N,
-    normalize_compat_extended: E,
-    convert: C,
-) -> impl Fn(&str, &str, bool) -> String + '_
-where
-    N: Fn(&T, &str) -> String + 'static,
-    E: Fn(&T, &str) -> String + 'static,
-    C: Fn(&T, &str, &str, bool) -> String + 'static,
-{
-    move |input, config, punctuation| {
-        normalize_and_convert_with(
-            input,
-            config,
-            punctuation,
-            mode,
-            |input| normalize_compat(engine, input),
-            |input| normalize_compat_extended(engine, input),
-            |input, config, punctuation| convert(engine, input, config, punctuation),
-        )
-    }
-}
-
 pub fn write_text_unix_newlines<P: AsRef<Path>>(path: P, s: &str) -> io::Result<()> {
     let normalized = s.replace("\r\n", "\n").replace('\r', "\n");
     std::fs::write(path, normalized.as_bytes())
@@ -302,12 +259,10 @@ pub fn convert_office_document<F>(
     format: Option<&str>,
     keep_font: bool,
     convert_filename: bool,
-    config: &str,
-    punctuation: bool,
     convert_text: F,
 ) -> Result<String, Box<dyn std::error::Error>>
 where
-    F: Fn(&str, &str, bool) -> String,
+    F: Fn(&str) -> String,
 {
     validate_input_file(input_file)?;
 
@@ -353,7 +308,7 @@ where
 
             let parent = input_path.parent().unwrap_or_else(|| ".".as_ref());
             let final_stem = if convert_filename {
-                let file_stem_converted = convert_text(file_stem, config, punctuation);
+                let file_stem_converted = convert_text(file_stem);
                 format!("{file_stem_converted}_converted")
             } else {
                 format!("{file_stem}_converted")
@@ -373,8 +328,6 @@ where
         &final_output,
         &office_format,
         &convert_text,
-        config,
-        punctuation,
         keep_font,
     ) {
         Ok(result) if result.success => {
@@ -394,14 +347,11 @@ where
 pub struct PdfOptions<'a> {
     pub input_file: &'a str,
     pub output_file: Option<&'a String>,
-    pub config: Option<&'a str>,
-    pub punctuation: bool,
     pub reflow: bool,
     pub compact: bool,
     pub header: bool,
     pub ignore_untrusted_pdf_text: bool,
     pub pdfium_dir: Option<&'a String>,
-    pub converter_name: &'a str,
 }
 
 pub fn extract_pdf(options: PdfOptions<'_>) -> Result<(), Box<dyn std::error::Error>> {
@@ -413,7 +363,7 @@ pub fn handle_pdf_with_converter<F>(
     mut convert_text: F,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
-    F: FnMut(&str, &str, bool) -> String,
+    F: FnMut(&str) -> String,
 {
     process_pdf(options, false, Some(&mut convert_text))
 }
@@ -421,7 +371,7 @@ where
 fn process_pdf(
     options: PdfOptions<'_>,
     extract_only: bool,
-    convert_text: Option<&mut dyn FnMut(&str, &str, bool) -> String>,
+    convert_text: Option<&mut dyn FnMut(&str) -> String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let input_norm = normalize_input_path(options.input_file);
     validate_input_file(&input_norm)?;
@@ -473,17 +423,8 @@ fn process_pdf(
         return Ok(());
     }
 
-    let config = options
-        .config
-        .ok_or("❌  --config is required unless --extract is used")?;
-
-    println!(
-        "Converting with {} (config: {}, punct: {}) ...",
-        options.converter_name, config, options.punctuation
-    );
-
     let convert_text = convert_text.expect("converter is required outside extract-only mode");
-    let converted = convert_text(&extracted, config, options.punctuation);
+    let converted = convert_text(&extracted);
     write_text_unix_newlines(&final_output, &converted)?;
 
     eprintln!(

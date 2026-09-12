@@ -1,3 +1,4 @@
+mod text_converter;
 use clap::builder::{StringValueParser, TypedValueParser, ValueParser};
 use clap::{Arg, ArgMatches, Command};
 use opencc_fmmseg::{
@@ -6,13 +7,14 @@ use opencc_fmmseg::{
 };
 use opencc_utils::{
     convert_office_document, decode_input, encode_and_write_output, exit_on_error, extract_pdf,
-    handle_pdf_with_converter, normalize_with, normalizing_converter, open_input_file, open_output,
-    remove_utf8_bom, should_remove_bom, validate_distinct_input_output, validate_encoding,
-    validate_input_file, validate_output_path, NormalizationMode, PdfOptions,
+    handle_pdf_with_converter, open_input_file, open_output, remove_utf8_bom, should_remove_bom,
+    validate_distinct_input_output, validate_encoding, validate_input_file, validate_output_path,
+    NormalizationMode, PdfOptions,
 };
 use std::io::{self, BufReader, IsTerminal, Read};
 use std::path::PathBuf;
 use std::sync::OnceLock;
+use text_converter::{create_text_converter, TextConverterOptions};
 
 fn main() {
     let matches = Command::new("opencc-rs")
@@ -259,24 +261,19 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
     }
 
     let input_str = decode_input(&buffer, in_enc)?;
-    let convert_input = normalize_with(
-        &input_str,
-        normalization_mode(matches),
-        |text| cc.normalize_compat(text),
-        |text| cc.normalize_compat_extended(text),
-    );
-
     if matches.get_flag("keep-ids") {
         cc.set_preserve_ids(true);
     }
-
-    let output_str = cc.convert(convert_input.as_ref(), config, punctuation);
-
-    let output_str = if let Some(map) = detofu_map {
-        map.detofu(&output_str)
-    } else {
-        output_str
-    };
+    let converter = create_text_converter(
+        &cc,
+        TextConverterOptions {
+            config,
+            punctuation,
+            normalization: normalization_mode(matches),
+            detofu_map: detofu_map.as_ref(),
+        },
+    );
+    let output_str = converter.convert(&input_str);
 
     let (is_console_output, mut output) = open_output(output_file)?;
 
@@ -310,7 +307,15 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
     }
     let detofu_map = build_detofu_map(matches)?;
     let helper = build_opencc(matches)?;
-    let normalization = normalization_mode(matches);
+    let converter = create_text_converter(
+        &helper,
+        TextConverterOptions {
+            config,
+            punctuation,
+            normalization: normalization_mode(matches),
+            detofu_map: detofu_map.as_ref(),
+        },
+    );
 
     convert_office_document(
         input_file,
@@ -318,9 +323,7 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
         format,
         keep_font,
         convert_filename,
-        config,
-        punctuation,
-        cli_text_converter(&helper, normalization, detofu_map.as_ref()),
+        |text| converter.convert(text),
     )?;
 
     Ok(())
@@ -373,14 +376,11 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let options = PdfOptions {
         input_file,
         output_file,
-        config,
-        punctuation,
         reflow,
         compact,
         header,
         ignore_untrusted_pdf_text,
         pdfium_dir,
-        converter_name: "Opencc-Fmmseg",
     };
 
     if extract_only {
@@ -389,35 +389,17 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
 
     let detofu_map = build_detofu_map(matches)?;
     let helper = build_opencc(matches)?;
-    let normalization = normalization_mode(matches);
-
-    handle_pdf_with_converter(
-        options,
-        cli_text_converter(&helper, normalization, detofu_map.as_ref()),
-    )
-}
-
-fn cli_text_converter<'a>(
-    helper: &'a OpenCC,
-    normalization: NormalizationMode,
-    detofu_map: Option<&'a DetofuMap>,
-) -> impl Fn(&str, &str, bool) -> String + 'a {
-    let converter = normalizing_converter(
-        helper,
-        normalization,
-        OpenCC::normalize_compat,
-        OpenCC::normalize_compat_extended,
-        OpenCC::convert,
+    let converter = create_text_converter(
+        &helper,
+        TextConverterOptions {
+            config: config.expect("config validated outside extract-only mode"),
+            punctuation,
+            normalization: normalization_mode(matches),
+            detofu_map: detofu_map.as_ref(),
+        },
     );
 
-    move |input, config, punctuation| {
-        let converted = converter(input, config, punctuation);
-
-        match detofu_map {
-            Some(map) => map.detofu(&converted),
-            None => converted,
-        }
-    }
+    handle_pdf_with_converter(options, |text| converter.convert(text))
 }
 
 fn normalization_mode(matches: &ArgMatches) -> NormalizationMode {
@@ -547,23 +529,16 @@ mod tests {
 
     #[test]
     fn pdf_cli_exposes_ignore_untrusted_text_flag() {
-        let cmd = Command::new("opencc-rs")
-            .subcommand(
-                Command::new("pdf")
-                    .args(common_args())
-                    .arg(
-                        Arg::new("ignore-untrusted-text")
-                            .long("ignore-untrusted-text")
-                            .action(clap::ArgAction::SetTrue),
-                    ),
-            );
+        let cmd = Command::new("opencc-rs").subcommand(
+            Command::new("pdf").args(common_args()).arg(
+                Arg::new("ignore-untrusted-text")
+                    .long("ignore-untrusted-text")
+                    .action(clap::ArgAction::SetTrue),
+            ),
+        );
 
         let matches = cmd
-            .try_get_matches_from([
-                "opencc-rs",
-                "pdf",
-                "--ignore-untrusted-text",
-            ])
+            .try_get_matches_from(["opencc-rs", "pdf", "--ignore-untrusted-text"])
             .unwrap();
 
         let (_, pdf) = matches.subcommand().unwrap();

@@ -338,6 +338,40 @@ Downstream tools are responsible for encoding conversion, dictionary-based trans
 
 ---
 
+## Configured text conversion in the CLI tools
+
+Both tools build their engine (including custom dictionaries) and one configured text converter per conversion command.
+Their `src/text_converter.rs` modules apply normalization, OpenCC conversion, and optional DeTofu in that order.
+The same converter handles plain text, Office/EPUB content, automatically generated filenames with `-F`, and extracted
+PDF text.
+PDF reflow happens before the configured converter runs. `pdf --extract` bypasses engine construction and needs no
+config.
+Jieba `segment` uses `normalize_with(...)` before segmentation and does not use this conversion pipeline.
+
+### Shared API migration
+
+`opencc-office-converter::TextConverter::convert` now takes only `&str` and returns `String`.
+Closures implementing `Fn(&str) -> String` receive the blanket trait implementation.
+Remove the `config` and `punctuation` arguments from `OfficeConverter::convert`, `convert_bytes`, and
+`convert_path_stream`, and capture them in your converter instead. The remaining argument order is unchanged:
+
+```rust,ignore
+let convert_text = |text: &str| engine.convert(text, config, punctuation);
+let (output, entries) = OfficeConverter::convert_bytes(&input, "docx", &convert_text, true)?;
+```
+
+`opencc_utils::convert_office_document(input, output, format, keep_font, convert_filename, convert_text)`
+accepts `Fn(&str) -> String` and uses it for both filename stems and document content.
+`handle_pdf_with_converter(options, convert_text)` accepts `FnMut(&str) -> String`.
+`PdfOptions` no longer contains `config`, `punctuation`, or `converter_name`.
+`extract_pdf(options)` remains the converter-free extraction API.
+The old `normalize_and_convert_with` and `normalizing_converter` adapters have been removed;
+`NormalizationMode` and `normalize_with` remain available for independent normalization.
+
+Conversion policy belongs to the caller; the shared Office/PDF conversion infrastructure handles documents and text I/O.
+
+---
+
 ## Development notes
 
 * Built with the official Rust stable toolchain
@@ -373,7 +407,4 @@ This crate is intended for:
 * Repository-specific PDF text extraction and CJK reflow pipelines
 
 It is not intended as a general-purpose PDF library or a standalone public dependency.
-
-
-
 

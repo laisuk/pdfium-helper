@@ -93,7 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (pdfium, lib_path) = PdfiumLibrary::load_with_fallbacks()?;
     println!("Loaded Pdfium: {}", lib_path.display());
 
-    let extracted = extract_pdf_text_pdfium(&pdfium, "document.pdf", false)?;
+    let extracted = extract_pdf_text_pdfium(&pdfium, "document.pdf", false, false)?;
     let reflowed = reflow_cjk_paragraphs(&extracted, false, false);
 
     std::fs::write("document.txt", reflowed)?;
@@ -261,6 +261,7 @@ pub fn extract_pdf_pages_with_callback_pdfium<F>(
     lib: &PdfiumLibrary,
     path: &str,
     add_page_header: bool,
+    ignore_untrusted_pdf_text: bool,
     callback: F,
 ) -> Result<(), PdfiumExtractError>
 where
@@ -268,6 +269,11 @@ where
 ```
 
 This is the most flexible extraction API.
+
+The extraction options are:
+
+- `add_page_header`: prepend page markers such as `=== [Page 3/120] ===`
+- `ignore_untrusted_pdf_text`: ignore repeated untrusted PDF text overlays detected during extraction
 
 The callback receives:
 
@@ -284,7 +290,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (pdfium, _) = PdfiumLibrary::load_with_fallbacks()?;
     let mut pages = Vec::new();
 
-    extract_pdf_pages_with_callback_pdfium(&pdfium, "document.pdf", false, |page, total, text| {
+    extract_pdf_pages_with_callback_pdfium(&pdfium, "document.pdf", false, false, |page, total, text| {
         println!("page {page}/{total}: {} chars", text.chars().count());
         pages.push(text.to_owned());
     })?;
@@ -306,12 +312,26 @@ Use this when:
 
 This is the convenience wrapper around the callback API.
 
+Signature shape:
+
+```text
+pub fn extract_pdf_text_pdfium(
+    lib: &PdfiumLibrary,
+    path: &str,
+    add_page_header: bool,
+    ignore_untrusted_pdf_text: bool,
+) -> Result<String, PdfiumExtractError>
+```
+
+The two boolean extraction options have the same meaning as in
+`extract_pdf_pages_with_callback_pdfium()`.
+
 ```rust
 use pdfium_helper::{extract_pdf_text_pdfium, PdfiumLibrary};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (pdfium, _) = PdfiumLibrary::load_with_fallbacks()?;
-    let text = extract_pdf_text_pdfium(&pdfium, "document.pdf", false)?;
+    let text = extract_pdf_text_pdfium(&pdfium, "document.pdf", false, false)?;
     println!("Extracted {} chars", text.chars().count());
     Ok(())
 }
@@ -357,6 +377,25 @@ Keep it `false` when:
 
 - you want the cleanest plain-text output
 - page markers would interfere with downstream processing
+
+### `ignore_untrusted_pdf_text`
+
+When `ignore_untrusted_pdf_text` is `true`, extraction uses the text-object path to
+filter repeated text overlays that appear untrustworthy. This is useful for PDFs
+that contain duplicated or repeated hidden/overlay text that would otherwise pollute
+the extracted result.
+
+Keep it `false` when:
+
+- you want Pdfium's normal flat-text extraction behavior
+- the document does not contain problematic repeated text overlays
+
+Enable it when:
+
+- extracted text contains suspicious repeated phrases or blocks
+- a PDF contains overlay text that is not part of the intended readable content
+
+The filter is heuristic, so normal extraction remains the safer default for ordinary PDFs.
 
 ### Blank-page and failure behavior
 
@@ -486,7 +525,7 @@ use pdfium_helper::{extract_pdf_text_pdfium, PdfiumExtractError, PdfiumLibrary};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (pdfium, _) = PdfiumLibrary::load_with_fallbacks()?;
 
-    match extract_pdf_text_pdfium(&pdfium, "document.pdf", false) {
+    match extract_pdf_text_pdfium(&pdfium, "document.pdf", false, false) {
         Ok(text) => println!("{}", text.len()),
         Err(err) => {
             if let PdfiumExtractError::LoadDocument { path, error } = &err {
@@ -513,7 +552,7 @@ use pdfium_helper::{extract_pdf_text_pdfium, PdfiumLibrary};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (pdfium, _) = PdfiumLibrary::load_with_fallbacks()?;
 
-    if let Err(err) = extract_pdf_text_pdfium(&pdfium, "document.pdf", false) {
+    if let Err(err) = extract_pdf_text_pdfium(&pdfium, "document.pdf", false, false) {
         eprintln!("{}", err.pretty());
     }
 
@@ -538,7 +577,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let input = "document.pdf";
     let (pdfium, _) = PdfiumLibrary::load_with_fallbacks()?;
 
-    extract_pdf_pages_with_callback_pdfium(&pdfium, input, false, |page, total, text| {
+    extract_pdf_pages_with_callback_pdfium(&pdfium, input, false, false, |page, total, text| {
         pdfium_helper::print_progress(page, total, text);
     })?;
     println!();
@@ -657,7 +696,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut pages = Vec::new();
 
-    let result = extract_pdf_pages_with_callback_pdfium(&pdfium, input, false, |page, total, text| {
+    let result = extract_pdf_pages_with_callback_pdfium(&pdfium, input, false, false, |page, total, text| {
         pdfium_helper::print_progress(page, total, text);
         pages.push(text.to_owned());
     });

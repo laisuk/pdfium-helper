@@ -261,6 +261,35 @@ target/release/opencc-jieba pdf -i book.pdf -c s2t -p -r
 
 ---
 
+## Text conversion pipeline
+
+`convert`, `office`, and `pdf` use one configured pipeline:
+
+1. Optional normalization with `-n/--norm-compat` or `-E/--norm-compat-extended`.
+2. OpenCC conversion using the selected config, punctuation setting, and loaded custom dictionaries.
+3. Optional DeTofu fallback.
+
+Office/EPUB content and automatically generated filename stems (`-F`) use this same pipeline.
+PDF conversion applies it after extraction and optional reflow. `pdf --extract` skips conversion entirely
+and does not require `-c` or construct a conversion engine.
+
+### DeTofu
+
+Add boolean `--detofu` to `convert`, `office`, or `pdf` to apply cumulative fallback for CJK Extension B-I
+characters after conversion (`DetofuLevel::ExtB`). It is disabled by default and takes no level argument.
+
+```bash
+opencc-jieba convert -c t2s -i input.txt -o output.txt --detofu
+opencc-jieba office -c s2t -i book.epub -F -E --detofu
+opencc-jieba pdf -c s2t -i book.pdf -r --detofu
+```
+
+`segment` does not expose `--detofu`: it retains independent normalization before Jieba segmentation.
+Repeatable `-U` user dictionaries still configure Jieba tokenization, while `-D` dictionaries configure conversion
+mappings.
+
+---
+
 ## Development
 
 ```text

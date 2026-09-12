@@ -10,10 +10,16 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Added boolean `--detofu` to `opencc-jieba convert`, `office`, and `pdf`, applying cumulative Extension B-I fallback after conversion.
+
 - Added `t2hkp` and `hk2tp` conversion configs to `opencc-rs`, aligned with `opencc-fmmseg` v0.11.4.
 - Cli: added `-E/--norm-compat-extended` feature to opencc-rs
 
 ### Changed
+
+- Centralized each CLI tool's normalization → conversion → optional DeTofu pipeline in `src/text_converter.rs`, shared by plain text, Office/EPUB content and filenames, and PDF conversion.
+- Changed shared Office conversion APIs and `TextConverter::convert` to accept configured `Fn(&str) -> String` converters; PDF converters now accept `FnMut(&str) -> String`. Removed config/punctuation parameters, OpenCC-specific normalization adapters, and `PdfOptions` fields `config`, `punctuation`, and `converter_name`.
+- Preserved standalone Jieba segment normalization and PDF extract-only operation without a converter or config.
 
 - Update dictionary data.
 - Update CLI tools deps.

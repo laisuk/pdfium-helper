@@ -1,3 +1,4 @@
+mod text_converter;
 use clap::builder::{StringValueParser, TypedValueParser, ValueParser};
 use clap::{Arg, ArgMatches, Command};
 use opencc_jieba_rs::{
@@ -6,14 +7,14 @@ use opencc_jieba_rs::{
 };
 use opencc_utils::{
     convert_office_document, decode_input, encode_and_write_output, exit_on_error, extract_pdf,
-    handle_pdf_with_converter, normalize_line_endings, normalize_with, normalizing_converter,
-    open_input_file, open_output, remove_utf8_bom, should_remove_bom,
-    validate_distinct_input_output, validate_encoding, validate_input_file, validate_output_path,
-    NormalizationMode, PdfOptions,
+    handle_pdf_with_converter, normalize_line_endings, normalize_with, open_input_file,
+    open_output, remove_utf8_bom, should_remove_bom, validate_distinct_input_output,
+    validate_encoding, validate_input_file, validate_output_path, NormalizationMode, PdfOptions,
 };
 use std::io::{self, BufRead, BufReader, IsTerminal, Read};
 use std::path::PathBuf;
 use std::sync::OnceLock;
+use text_converter::{create_text_converter, TextConverterOptions};
 
 const BLUE: &str = "\x1B[1;34m";
 const RESET: &str = "\x1B[0m";
@@ -262,6 +263,10 @@ fn common_args() -> Vec<Arg> {
                 "Conversion configuration ({})",
                 get_supported_configs()
             )),
+        Arg::new("detofu")
+            .long("detofu")
+            .action(clap::ArgAction::SetTrue)
+            .help("Apply DeTofu fallback for CJK Extension B-I characters after conversion"),
         Arg::new("punct")
             .short('p')
             .long("punct")
@@ -354,14 +359,16 @@ fn handle_convert(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
 
     let input_str = decode_input(&buffer, in_enc)?;
     // let opencc = OpenccJieba::new();
-    let convert_input = normalize_with(
-        &input_str,
-        normalization_mode(matches),
-        |text| opencc.normalize_compat(text),
-        |text| opencc.normalize_compat_extended(text),
+    let converter = create_text_converter(
+        &opencc,
+        TextConverterOptions {
+            config,
+            punctuation,
+            normalization: normalization_mode(matches),
+            detofu: matches.get_flag("detofu"),
+        },
     );
-
-    let output_str = opencc.convert(convert_input.as_ref(), config, punctuation);
+    let output_str = converter.convert(&input_str);
 
     let (is_console_output, mut output) = open_output(output_file)?;
 
@@ -395,16 +402,22 @@ fn handle_office(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
     }
     // let helper = OpenccJieba::new();
     let helper = build_opencc_jieba(matches)?;
-    let normalization = normalization_mode(matches);
+    let converter = create_text_converter(
+        &helper,
+        TextConverterOptions {
+            config,
+            punctuation,
+            normalization: normalization_mode(matches),
+            detofu: matches.get_flag("detofu"),
+        },
+    );
     convert_office_document(
         input_file,
         output_file,
         format,
         keep_font,
         convert_filename,
-        config,
-        punctuation,
-        normalized_converter(&helper, normalization),
+        |text| converter.convert(text),
     )?;
 
     Ok(())
@@ -556,14 +569,11 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let options = PdfOptions {
         input_file,
         output_file,
-        config,
-        punctuation,
         reflow,
         compact,
         header,
         ignore_untrusted_pdf_text,
         pdfium_dir,
-        converter_name: "Opencc-Jieba",
     };
 
     if extract_only {
@@ -572,23 +582,18 @@ fn handle_pdf(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
 
     // let helper = OpenccJieba::new();
     let helper = build_opencc_jieba(matches)?;
-    let normalization = normalization_mode(matches);
+    let converter = create_text_converter(
+        &helper,
+        TextConverterOptions {
+            config: config.expect("config validated outside extract-only mode"),
+            punctuation,
+            normalization: normalization_mode(matches),
+            detofu: matches.get_flag("detofu"),
+        },
+    );
 
-    handle_pdf_with_converter(options, normalized_converter(&helper, normalization))
+    handle_pdf_with_converter(options, |text| converter.convert(text))
 }
-fn normalized_converter(
-    helper: &OpenccJieba,
-    normalization: NormalizationMode,
-) -> impl Fn(&str, &str, bool) -> String + '_ {
-    normalizing_converter(
-        helper,
-        normalization,
-        OpenccJieba::normalize_compat,
-        OpenccJieba::normalize_compat_extended,
-        OpenccJieba::convert,
-    )
-}
-
 fn normalization_mode(matches: &ArgMatches) -> NormalizationMode {
     NormalizationMode::from_flags(
         matches.get_flag("norm-compat"),

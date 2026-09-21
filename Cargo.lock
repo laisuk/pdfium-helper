@@ -630,9 +630,9 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencc-fmmseg"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8b622655657a313aab255880b3d22cb8bab73f3b209237e224bdacfe1ff915e"
+checksum = "7475e47d14d74de9dcb6b79f5ab75820b9d3058dbd9ddc63bc34a309f31fa5b5"
 dependencies = [
  "rayon",
  "rayon-core",
@@ -660,7 +660,7 @@ dependencies = [
 [[package]]
 name = "opencc-jieba-rs"
 version = "0.8.1"
-source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#5dd45271d70ac0f6853e344889c32e8035e46a86"
+source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#1a651915906b5bc7b202cdb0a1de4fa2b5c09c0b"
 dependencies = [
  "include-flate",
  "jieba-rs",
@@ -683,7 +683,7 @@ dependencies = [
 
 [[package]]
 name = "opencc-rs"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "clap",
  "clap_lex",

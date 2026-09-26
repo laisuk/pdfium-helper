@@ -515,11 +515,11 @@ mod tests {
 
     #[test]
     fn custom_dict_specs_use_canonical_case_insensitive_slot_parsing() {
-        let spec = parse_custom_dict_spec("hkphrasesrev:APPEND:custom.txt").unwrap();
+        let spec = parse_custom_dict_spec("hkphrasesrev:APPEND:../../../tests/my_hk_dict.txt").unwrap();
 
         assert_eq!(spec.slot, DictSlot::HKPhrasesRev);
         assert_eq!(spec.mode, CustomDictMode::Append);
-        assert_eq!(spec.files, vec![PathBuf::from("custom.txt")]);
+        assert_eq!(spec.files, vec![PathBuf::from("../../../tests/my_hk_dict.txt")]);
     }
 
     #[test]

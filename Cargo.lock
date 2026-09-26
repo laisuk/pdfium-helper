@@ -686,7 +686,6 @@ dependencies = [
  "clap_lex",
  "opencc-fmmseg",
  "opencc-utils",
- "rustc-hash",
  "toml 0.8.23",
  "winres",
 ]

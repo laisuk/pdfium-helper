@@ -6,27 +6,29 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-[0.1.6] - Unreleased
+## [0.1.6] - 2026-09-26
 
 ### Added
 
-- Added boolean `--detofu` to `opencc-jieba convert`, `office`, and `pdf`, applying cumulative Extension B-I fallback after conversion.
-
-- Added `t2hkp` and `hk2tp` conversion configs to `opencc-rs`, aligned with `opencc-fmmseg` v0.11.4.
+- Added boolean `--detofu` to `opencc-jieba convert`, `office`, and `pdf`, applying cumulative Extension B-I fallback
+  after conversion.
+- Added `t2hkp`, `hk2tp`, `s2seal`, `t2seal`, `seal2s` and `seal2t` conversion configs to `opencc-rs`, aligned with `opencc-fmmseg` v0.13.0.
 - Cli: added `-E/--norm-compat-extended` feature to opencc-rs
 
 ### Changed
 
-- Centralized each CLI tool's normalization → conversion → optional DeTofu pipeline in `src/text_converter.rs`, shared by plain text, Office/EPUB content and filenames, and PDF conversion.
-- Changed shared Office conversion APIs and `TextConverter::convert` to accept configured `Fn(&str) -> String` converters; PDF converters now accept `FnMut(&str) -> String`. Removed config/punctuation parameters, OpenCC-specific normalization adapters, and `PdfOptions` fields `config`, `punctuation`, and `converter_name`.
+- Centralized each CLI tool's normalization → conversion → optional DeTofu pipeline in `src/text_converter.rs`, shared
+  by plain text, Office/EPUB content and filenames, and PDF conversion.
+- Changed shared Office conversion APIs and `TextConverter::convert` to accept configured `Fn(&str) -> String`
+  converters; PDF converters now accept `FnMut(&str) -> String`. Removed config/punctuation parameters, OpenCC-specific
+  normalization adapters, and `PdfOptions` fields `config`, `punctuation`, and `converter_name`.
 - Preserved standalone Jieba segment normalization and PDF extract-only operation without a converter or config.
-
 - Update dictionary data.
 - Update CLI tools deps.
 - Optimized Reflow helper for handling unclosed dialog quote in standalone finalizer.
 - Reflow: Allow commas in title headings when they appear within the first 20 characters.
 - Reflow: Fixed reflow stitching when a dialog closer appears on its own line after sentence-ending punctuation.
-- Update release workflow for `opencc-rs` v0.11.6 and `opencc-jieba` v0.8.0 (updated).
+- Update release workflow for `opencc-rs` v0.13.0 and `opencc-jieba` v0.8.1 (updated).
 - Update Pdfium natives to `152.0.7961.0`.
 
 ---

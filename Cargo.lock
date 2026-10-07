@@ -631,7 +631,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 [[package]]
 name = "opencc-fmmseg"
 version = "0.13.0"
-source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#805cbe5495388a667ea04cbf3dd64ba25b069ae5"
+source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#bf2affec4fd3f77342d82db085c7be06d869480c"
 dependencies = [
  "rayon",
  "regex",
@@ -657,7 +657,7 @@ dependencies = [
 [[package]]
 name = "opencc-jieba-rs"
 version = "0.8.1"
-source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#0526b828c6456764666d0bb52e69c826fdea3300"
+source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#22465174d6dc7ed7e00002e8efefdc5aa57d4d34"
 dependencies = [
  "include-flate",
  "jieba-rs",
@@ -712,7 +712,7 @@ dependencies = [
 
 [[package]]
 name = "pdfium-helper"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "anyhow",
  "libloading",
@@ -720,7 +720,6 @@ dependencies = [
  "smallvec",
  "thiserror",
  "unicode-general-category",
- "zstd",
 ]
 
 [[package]]

@@ -8,7 +8,7 @@ members = [
 
 [package]
 name = "pdfium-helper"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 rust-version = "1.75.0"
 publish = false
@@ -24,6 +24,13 @@ categories = ["external-ffi-bindings", "text-processing"]
 include = [
     "Cargo.toml",
     "/LICENSE",
+    "/README.md",
+    "/USER_GUIDE.md",
+    "/CHANGELOG.md",
+    # Vendored decoder attribution and implementation notes
+    "/src/zstd/LICENSE-RUZSTD",
+    "/src/zstd/NOTICE.md",
+    "/src/zstd/README.md",
     "/VERSION",
     # All source code
     "src/**/*.rs",
@@ -36,7 +43,6 @@ libloading = "=0.8"
 thiserror = "=2.0.20"
 anyhow = "1.0"
 smallvec = "=1.15"
-zstd = "0.14"
 regex = "1.13"
 unicode-general-category = "1"
 
@@ -47,7 +53,12 @@ core2 = { git = "https://github.com/bbqsrc/core2", rev = "545e84bcb0f235b12e2135
 default = []
 # Turn on integration tests that require an actual pdfium binary present
 integration = []
+# Embed precompressed Pdfium; decode with the vendored pure Rust Zstandard module
 pdfium-embed = []
+
+[package.metadata.docs.rs]
+features = ["pdfium-embed"]
+default-target = "x86_64-unknown-linux-gnu"
 
 # Default: heavy optimization for libraries (C API performance)
 [profile.release]

@@ -88,7 +88,7 @@ pub enum PdfiumLoadError {
     LoadFailed(String),
 }
 
-/// Equivalent to `_detect_platform_folder()` in Python. \:contentReference[oaicite:4]{index=4}
+/// Equivalent to `_detect_platform_folder()` in Python.
 pub fn detect_platform_folder() -> Result<String, PdfiumLoadError> {
     #[cfg(target_os = "windows")]
     {
@@ -550,6 +550,15 @@ impl PdfiumLibrary {
     }
 
     #[cfg(feature = "pdfium-embed")]
+    /// Loads the embedded Pdfium library, reusing a loadable versioned cache file.
+    ///
+    /// Available with the `pdfium-embed` feature. If extraction is needed, the
+    /// precompressed binary is decoded using the vendored pure Rust Zstandard
+    /// decoder and written to the cache directory for `app_name` before loading.
+    /// Pdfium itself remains a dynamically loaded native library.
+    ///
+    /// Decoding, cache writes, and native loading failures are returned as
+    /// [`PdfiumLoadError`].
     pub fn load_from_embedded(app_name: &str) -> Result<(Self, PathBuf), PdfiumLoadError> {
         let platform = detect_platform_folder()?;
 
@@ -660,15 +669,6 @@ compile_error!("pdfium-embed enabled but no embedded pdfium binary for this targ
 
 #[cfg(feature = "pdfium-embed")]
 fn decompress_native(zstd_bytes: &[u8]) -> Result<Vec<u8>, PdfiumLoadError> {
-    use std::io::Read;
-
-    let mut decoder = zstd::stream::read::Decoder::new(zstd_bytes)
-        .map_err(|e| PdfiumLoadError::LoadFailed(format!("zstd decoder: {e}")))?;
-
-    let mut out = Vec::new();
-    decoder
-        .read_to_end(&mut out)
-        .map_err(|e| PdfiumLoadError::LoadFailed(format!("zstd decode: {e}")))?;
-
-    Ok(out)
+    crate::zstd::decompress(zstd_bytes)
+        .map_err(|e| PdfiumLoadError::LoadFailed(format!("zstd decode: {e}")))
 }

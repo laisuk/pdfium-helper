@@ -45,6 +45,20 @@ If you want embedded native loading:
 pdfium-helper = { path = "../pdfium-helper", features = ["pdfium-embed"] }
 ```
 
+Embedded mode includes a precompressed Pdfium binary and decompresses it on demand with a vendored pure Rust
+Zstandard decoder adapted from `ruzstd` 0.9.0. No native Zstandard library or C compiler is needed for this decoding;
+Pdfium itself is still a native library, extracted to the cache before loading. Default features are empty, so the
+decoder is omitted in dynamic mode.
+
+Cargo builds use the committed `.zst` files. Only maintainers regenerating them with `compress-pdfium.ps1` need
+`zstd.exe`. See the [decoder notes](src/zstd/README.md) for format support and limits.
+
+Build API documentation including the embedded-loading methods with:
+
+```bash
+cargo doc -p pdfium-helper --no-deps --features pdfium-embed
+```
+
 ### 2. Provide a Pdfium native library
 
 In dynamic mode, `pdfium-helper` expects a platform-matching Pdfium library such as:
@@ -347,7 +361,8 @@ Use this when:
 
 ## Extraction Behavior Details
 
-These details matter because `pdfium-helper` intentionally follows Pdfium's flat-text behavior rather than reconstructing visual layout.
+These details matter because `pdfium-helper` intentionally follows Pdfium's flat-text behavior rather than
+reconstructing visual layout.
 
 ### Text normalization rules
 
@@ -399,7 +414,8 @@ The filter is heuristic, so normal extraction remains the safer default for ordi
 
 ### Blank-page and failure behavior
 
-If a page cannot be loaded or a text page handle cannot be created, the extractor emits a blank-page marker for that page rather than aborting the entire document.
+If a page cannot be loaded or a text page handle cannot be created, the extractor emits a blank-page marker for that
+page rather than aborting the entire document.
 
 If the document itself cannot be opened, extraction returns `PdfiumExtractError::LoadDocument`.
 
@@ -656,23 +672,28 @@ Good when Pdfium is loaded once and reused many times.
 
 ### Scanned PDFs do not magically work
 
-This crate only extracts text that already exists as embedded PDF text. If a PDF is image-only, you need OCR outside this crate.
+This crate only extracts text that already exists as embedded PDF text. If a PDF is image-only, you need OCR outside
+this crate.
 
 ### Reflow is heuristic, not semantic
 
-`reflow_cjk_paragraphs()` is designed for practical readability, especially for CJK prose. It will not perfectly reconstruct every layout or genre.
+`reflow_cjk_paragraphs()` is designed for practical readability, especially for CJK prose. It will not perfectly
+reconstruct every layout or genre.
 
 ### Page callbacks receive normalized page chunks
 
-The callback text is not raw bytes from Pdfium. It already includes the wrapper's normalization rules and optional page headers.
+The callback text is not raw bytes from Pdfium. It already includes the wrapper's normalization rules and optional page
+headers.
 
 ### Concurrency still needs care
 
-`global_with_fallbacks()` keeps the library loaded, but you should still protect overlapping extraction jobs if your app might run them concurrently.
+`global_with_fallbacks()` keeps the library loaded, but you should still protect overlapping extraction jobs if your app
+might run them concurrently.
 
 ### Utility helpers are not the main product
 
-`format_thousand()` and `print_progress()` are handy, but most consumers only need the loading, extraction, and reflow APIs.
+`format_thousand()` and `print_progress()` are handy, but most consumers only need the loading, extraction, and reflow
+APIs.
 
 ---
 
@@ -734,13 +755,16 @@ Most users only need these items:
 - `reflow_cjk_paragraphs()`
 - `reflow_cjk_paragraphs_with_heading_regex()`
 
-Additional helpers exported from the crate root are available, but they are lower-level or convenience-oriented and usually not needed for basic integrations.
+Additional helpers exported from the crate root are available, but they are lower-level or convenience-oriented and
+usually not needed for basic integrations.
 
 ---
 
 ## Where To Look Next
 
 - [`README.md`](README.md) for crate scope and deployment notes
-- [`examples/use_pdfium_extract_only_progress.rs`](examples/use_pdfium_extract_only_progress.rs) for a progress-oriented extractor
-- [`examples/use_pdfium_extract_and_reflow_progress.rs`](examples/use_pdfium_extract_and_reflow_progress.rs) for extract-then-reflow usage
+- [`examples/use_pdfium_extract_only_progress.rs`](examples/use_pdfium_extract_only_progress.rs) for a progress-oriented
+  extractor
+- [`examples/use_pdfium_extract_and_reflow_progress.rs`](examples/use_pdfium_extract_and_reflow_progress.rs) for
+  extract-then-reflow usage
 - [`src/lib.rs`](src/lib.rs) for the crate root exports

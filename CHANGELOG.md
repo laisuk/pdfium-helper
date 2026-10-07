@@ -6,13 +6,26 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.1.7] - Unreleased
+
+### Changed
+
+- Replaced the `zstd` crate dependency with a vendored pure Rust decoder adapted from `ruzstd` 0.9.0 for embedded
+  Pdfium binaries. The decoder is compiled only with `pdfium-embed`, removing the native Zstandard build dependency.
+- Documented decoder format support and limits, artifact regeneration, and upstream MIT attribution; included the
+  vendored license and notices in the package file list.
+- Added crate-level Rustdoc and docs.rs metadata enabling `pdfium-embed` so embedded-loading APIs are documented.
+
+---
+
 ## [0.1.6] - 2026-09-26
 
 ### Added
 
 - Added boolean `--detofu` to `opencc-jieba convert`, `office`, and `pdf`, applying cumulative Extension B-I fallback
   after conversion.
-- Added `t2hkp`, `hk2tp`, `s2seal`, `t2seal`, `seal2s` and `seal2t` conversion configs to `opencc-rs`, aligned with `opencc-fmmseg` v0.13.0.
+- Added `t2hkp`, `hk2tp`, `s2seal`, `t2seal`, `seal2s` and `seal2t` conversion configs to `opencc-rs`, aligned with
+  `opencc-fmmseg` v0.13.0.
 - Cli: added `-E/--norm-compat-extended` feature to opencc-rs
 
 ### Changed

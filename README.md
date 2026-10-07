@@ -66,6 +66,7 @@ src/
 ├── pdfium_loader.rs   # Native library discovery & loading
 ├── pdfium_text.rs     # PDF text extraction (page-based)
 ├── reflow_helper.rs   # CJK paragraph reflow logic
+├── zstd/              # Vendored pure Rust decoder (pdfium-embed only)
 └── lib.rs
 ```
 
@@ -167,12 +168,23 @@ guard.
 When this feature is enabled:
 
 * A single platform-specific PDFium native library is embedded into the binary
-* The embedded native is compressed with zstd at build time
+* A precompressed `.zst` artifact is included at build time
+* Decompression uses the vendored pure Rust decoder adapted from `ruzstd` 0.9.0, without a native Zstandard library or
+  a C compiler for Zstandard decoding
 * On first actual use, the library is decompressed and written to a cache directory
 * Subsequent runs try to load the cached extracted library first and only decompress again if the cache is missing or no
   longer loadable
 
 ### Enabling embedded mode
+
+The decoder is internal and compiled only with `pdfium-embed`; Pdfium itself remains a native library.
+It supports frames with or without a declared content size, with a 100 MiB history-window limit. It decodes one frame,
+ignores trailing input, consumes checksums without validating them, and does not support Zstandard decoding
+dictionaries.
+See [decoder notes](src/zstd/README.md) and [attribution](src/zstd/NOTICE.md).
+
+Maintainers regenerate compressed binaries with `compress-pdfium.ps1`, which requires `zstd.exe` in `PATH`.
+Ordinary Cargo builds use the committed artifacts and do not run the compressor.
 
 In a downstream crate (for example, `opencc-rs`):
 
@@ -192,6 +204,14 @@ Build with:
 ```bash
 cargo build --release --features pdfium-embed
 ```
+
+To include embedded-loading APIs in local Rustdoc (the feature also selected by the docs.rs metadata):
+
+```bash
+cargo doc -p pdfium-helper --no-deps --features pdfium-embed
+```
+
+The crate remains unpublished (`publish = false`); docs.rs metadata describes the documentation build configuration.
 
 ### Runtime behavior
 

@@ -22,8 +22,6 @@ include-flate = "=0.3.0"
 # Newer versions remove core2 but require newer Rust (>=1.81).
 libflate = "=2.1.0"
 
-
-
 [build-dependencies]
 winres = "0.1"
 toml = "=0.8"

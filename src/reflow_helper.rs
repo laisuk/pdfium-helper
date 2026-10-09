@@ -236,17 +236,10 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
                     // (The code already uses CJK_PUNCT_END for this)
                     let prev_ends_with_sentence_punct = CJK_PUNCT_END.contains(&last);
 
-                    // Comma-ending → continuation
-                    if prev_ends_with_comma_like {
-                        split_as_heading = false;
-                    }
-                    // All-CJK / colon-like / postfix-closer “heading-ish line”
-                    // + previous not ended → continuation
-                    else if current_looks_like_cont_marker && !prev_ends_with_sentence_punct {
-                        split_as_heading = false;
-                    } else {
-                        split_as_heading = true;
-                    }
+                    // Comma-ending → continuation.
+                    // Heading-like line without previous sentence punctuation → continuation.
+                    split_as_heading = !prev_ends_with_comma_like
+                        && (!current_looks_like_cont_marker || prev_ends_with_sentence_punct);
                 } else {
                     // Buffer is whitespace-only → treat like empty
                     split_as_heading = true;
@@ -287,8 +280,7 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
 
         let stripped_ends_with_strong_sentence_end = stripped
             .chars()
-            .rev()
-            .next()
+            .next_back()
             .is_some_and(is_strong_sentence_end);
 
         let stripped_is_complete_standalone = stripped_ends_with_strong_sentence_end
@@ -334,7 +326,7 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
                     (current_is_list_start && begins_with_simple_list_starter(buffer_text)) || {
                         let trimmed_buffer = buffer_text.trim_end();
 
-                        match trimmed_buffer.chars().rev().next() {
+                        match trimmed_buffer.chars().next_back() {
                             Some(ch) => {
                                 !is_comma_like(ch)
                                     && !is_cjk_bmp(ch)
@@ -517,10 +509,9 @@ fn is_metadata_line(line: &str) -> bool {
         return false;
     }
 
-    let mut char_pos = 0usize;
     let mut sep_byte_idx: Option<usize> = None;
 
-    for (byte_idx, ch) in s.char_indices() {
+    for (char_pos, (byte_idx, ch)) in s.char_indices().enumerate() {
         if METADATA_SEPARATORS.contains(&ch) {
             if char_pos == 0 || char_pos > 10 {
                 return false;
@@ -528,7 +519,6 @@ fn is_metadata_line(line: &str) -> bool {
             sep_byte_idx = Some(byte_idx);
             break;
         }
-        char_pos += 1;
     }
 
     let sep_byte_idx = match sep_byte_idx {
@@ -692,7 +682,7 @@ fn is_heading_like(s: &str) -> bool {
 
     // If the whole line is wrapped by a matching bracket pair, treat as heading-like.
     // Examples: （第一章）, 【序章】, 《后记》, 〈楔子〉
-    if let (Some(first), Some(last)) = (s.chars().next(), s.chars().rev().next()) {
+    if let (Some(first), Some(last)) = (s.chars().next(), s.chars().next_back()) {
         if is_matching_bracket(first, last) {
             // Ensure some content inside brackets (not just "（）")
             let inner = s
@@ -720,11 +710,11 @@ fn is_heading_like(s: &str) -> bool {
                 return true;
             }
         }
-        if is_allowed_postfix_closer(last) {
-            if !contains_any_comma_like(s) {
-                return true;
-            }
+
+        if is_allowed_postfix_closer(last) && !contains_any_comma_like(s) {
+            return true;
         }
+
         if CJK_PUNCT_END.contains(&last) {
             return false;
         }
@@ -858,16 +848,20 @@ fn collapse_repeated_word_sequences<'a>(parts: &[&'a str]) -> SmallVec<[&'a str;
             if count >= MIN_REPEATS {
                 let mut result =
                     SmallVec::<[&str; 16]>::with_capacity(n - (count - 1) * phrase_len);
-                for i in 0..start {
-                    result.push(parts[i]);
+
+                for &part in &parts[..start] {
+                    result.push(part);
                 }
-                for k in 0..phrase_len {
-                    result.push(parts[start + k]);
+
+                for &part in &parts[start..start + phrase_len] {
+                    result.push(part);
                 }
+
                 let tail_start = start + count * phrase_len;
-                for i in tail_start..n {
-                    result.push(parts[i]);
+                for &part in &parts[tail_start..] {
+                    result.push(part);
                 }
+
                 return result;
             }
         }
@@ -880,7 +874,7 @@ fn collapse_repeated_token(token: &str) -> String {
     let chars: Vec<char> = token.chars().collect();
     let length = chars.len();
 
-    if length < 4 || length > 200 {
+    if !(4..=200).contains(&length) {
         return token.to_owned();
     }
 
@@ -951,18 +945,10 @@ fn first_n_chars_and_next_start(s: &str, n: usize) -> Option<(&str, usize)> {
         return Some(("", 0));
     }
 
-    let mut iter = s.char_indices();
-    let mut count = 0usize;
+    let (idx, ch) = s.char_indices().nth(n - 1)?;
+    let end = idx + ch.len_utf8();
 
-    while let Some((idx, ch)) = iter.next() {
-        count += 1;
-        if count == n {
-            let end = idx + ch.len_utf8();
-            return Some((&s[..end], end));
-        }
-    }
-
-    None
+    Some((&s[..end], end))
 }
 
 struct DialogState {

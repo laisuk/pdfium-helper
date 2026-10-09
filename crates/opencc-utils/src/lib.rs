@@ -436,7 +436,7 @@ fn process_pdf(
 
 fn normalize_input_path(input_file: &str) -> String {
     if cfg!(windows) {
-        input_file.replace(['/', '\\'], &std::path::MAIN_SEPARATOR.to_string())
+        input_file.replace(['/', '\\'], std::path::MAIN_SEPARATOR_STR)
     } else {
         input_file.to_owned()
     }

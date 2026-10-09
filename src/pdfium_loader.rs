@@ -102,7 +102,7 @@ pub fn detect_platform_folder() -> Result<String, PdfiumLoadError> {
                 }
             }
         };
-        return Ok(format!("win-{}", arch));
+        Ok(format!("win-{}", arch))
     }
 
     #[cfg(target_os = "linux")]
@@ -120,7 +120,7 @@ pub fn detect_platform_folder() -> Result<String, PdfiumLoadError> {
                 }
             }
         };
-        return Ok(format!("linux-{}", arch));
+        Ok(format!("linux-{}", arch))
     }
 
     #[cfg(target_os = "macos")]
@@ -130,7 +130,7 @@ pub fn detect_platform_folder() -> Result<String, PdfiumLoadError> {
         } else {
             "x64"
         };
-        return Ok(format!("macos-{}", arch));
+        Ok(format!("macos-{}", arch))
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]

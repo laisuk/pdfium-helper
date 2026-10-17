@@ -1,7 +1,6 @@
-use pdfium_helper;
-
 #[test]
 #[allow(path_statements)]
+#[allow(clippy::no_effect)]
 fn compress_newlines_max_two() {
     // 4 newlines -> 2
     let _s = "a\n\n\n\nb";

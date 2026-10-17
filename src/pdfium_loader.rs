@@ -68,10 +68,10 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 
     // Rename is atomic on most platforms. On Windows, rename fails if the target DLL is loaded.
     // That’s why we version the filename below (so we don't overwrite a loaded DLL).
-    fs::rename(&tmp, path).or_else(|e| {
+    if let Err(e) = fs::rename(&tmp, path) {
         let _ = fs::remove_file(&tmp);
-        Err(e)
-    })?;
+        return Err(e);
+    }
 
     Ok(())
 }

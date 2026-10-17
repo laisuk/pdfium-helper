@@ -27,6 +27,8 @@ mod pdfium_text;
 mod punct_sets;
 mod reflow_helper;
 mod utils;
+
+#[allow(clippy::upper_case_acronyms)]
 #[cfg(feature = "pdfium-embed")]
 mod zstd;
 

@@ -6,5 +6,5 @@ rust-version = "1.75.0"
 publish = false
 
 [dependencies]
-regex = "1.12"
+regex = "1.13"
 zip = { version = "=3.0", default-features = false, features = ["deflate"] }

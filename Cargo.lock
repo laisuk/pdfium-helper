@@ -591,12 +591,11 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 [[package]]
 name = "opencc-fmmseg"
 version = "0.13.1"
-source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#61eb4c0566588c229e60083b69cd7493b595cf98"
+source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#8216f6f9ea1b9c3a7af1019388124553ad1e4808"
 dependencies = [
  "rayon",
  "rayon-core",
  "regex",
- "rustc-hash",
  "serde",
  "serde_cbor",
 ]
@@ -617,15 +616,14 @@ dependencies = [
 
 [[package]]
 name = "opencc-jieba-rs"
-version = "0.8.1"
-source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#5a37b10c59db5418887896bfd50ee29ca8c9a7bb"
+version = "0.8.2"
+source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#aae4fcd42d6bd06c22c0c6a1127175f204aff855"
 dependencies = [
  "include-flate",
  "jieba-rs",
  "rayon",
  "rayon-core",
  "regex",
- "rustc-hash",
  "serde",
  "serde_json",
 ]
@@ -807,12 +805,6 @@ name = "rle-decode-fast"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3582f63211428f83597b51b2ddb88e2a91a9d52d12831f9d08f5e624e8977422"
-
-[[package]]
-name = "rustc-hash"
-version = "2.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "357703d41365b4b27c590e3ed91eabb1b663f07c4c084095e60cbed4362dff0d"
 
 [[package]]
 name = "serde"

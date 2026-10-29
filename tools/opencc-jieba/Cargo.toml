@@ -1,6 +1,6 @@
 [package]
 name = "opencc-jieba"
-version = "0.8.1"
+version = "0.9.0"
 edition = "2021"
 
 [package.metadata.capi]
@@ -16,11 +16,11 @@ opencc-utils = { path = "../../crates/opencc-utils" }
 # Exact dependency pins to preserve MSRV (rustc 1.75.0):
 # clap_lex@1.0.1
 clap_lex = "=1.0"
-include-flate = "=0.3.0"
 
+#include-flate = "=0.3.0"
 # libflate 2.1.0 is pinned for Rust 1.75.0 compatibility.
 # Newer versions remove core2 but require newer Rust (>=1.81).
-libflate = "=2.1.0"
+#libflate = "=2.1.0"
 
 [build-dependencies]
 winres = "0.1"

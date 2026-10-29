@@ -4,7 +4,12 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.75.0"
 publish = false
+readme = "README.md"
 
 [dependencies]
 regex = "1.13"
-zip = { version = "=3.0", default-features = false, features = ["deflate"] }
+# Support crates for the private ZIP module (Stored + Rust 1.75-compatible DEFLATE).
+crc32fast = "1.5"
+flate2 = { version = "=1.1.1", default-features = false, features = ["rust_backend"] }
+indexmap = "=2.7.1"
+memchr = "2.7"

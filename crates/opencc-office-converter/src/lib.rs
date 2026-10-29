@@ -45,16 +45,18 @@
 //! # Ok(())
 //! # }
 //! ```
+mod zip;
+
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, BufReader, Cursor, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 
-use regex::{Captures, Regex};
-use zip::{
+use crate::zip::{
     write::{ExtendedFileOptions, FileOptions},
     CompressionMethod, ZipArchive, ZipWriter,
 };
+use regex::{Captures, Regex};
 
 /// Abstraction used by [`OfficeConverter`] to transform textual document parts.
 ///
@@ -557,15 +559,10 @@ impl OfficeConverter {
     ///
     /// ZIP entry names are archive paths rather than native filesystem paths, so
     /// validate both slash styles explicitly. This rejects Unix-style absolute
-    /// paths, Windows-style rooted/drive-prefixed paths, and any `..` component.
+    /// paths, Windows drive-relative paths, alternate data streams, NULs, and any `..` component.
     #[inline]
     fn is_unsafe_zip_name(name: &str) -> bool {
-        name.starts_with('/')
-            || name.starts_with('\\')
-            || (name.len() >= 3
-                && name.as_bytes()[1] == b':'
-                && matches!(name.as_bytes()[2], b'/' | b'\\'))
-            || name.split(['/', '\\']).any(|part| part == "..")
+        crate::zip::unsafe_path(name)
     }
 
     fn mask_font(xml: &mut String, format: &str, font_map: &mut HashMap<String, String>) {
@@ -698,12 +695,13 @@ fn replace_with_temp(
 
 #[cfg(test)]
 mod tests {
+    include!("security_tests.rs");
     use super::*;
-    use std::io::Cursor;
-    use zip::{
+    use crate::zip::{
         write::{ExtendedFileOptions, FileOptions},
         CompressionMethod, ZipArchive, ZipWriter,
     };
+    use std::io::Cursor;
 
     #[test]
     fn configured_closure_converts_docx_content() {

@@ -368,6 +368,22 @@ PDF reflow happens before the configured converter runs. `pdf --extract` bypasse
 config.
 Jieba `segment` uses `normalize_with(...)` before segmentation and does not use this conversion pipeline.
 
+### Shared Office ZIP implementation
+
+Both CLI tools use `crates/opencc-office-converter`, which now bundles a private
+ZIP 3.0.0 adaptation with mandatory local/central-header consistency checks.
+Malformed headers, duplicate effective names, and overlapping indexed entries
+fail conversion before output replacement. Portable unsafe paths are skipped;
+the filter also covers Windows drive-relative paths, alternate data streams,
+and NUL bytes. Existing configured conversion APIs and font handling are unchanged.
+
+The external `zip` dependency was replaced by `crc32fast`, `memchr`,
+`indexmap =2.7.1`, and `flate2 =1.1.1` using the pure-Rust miniz_oxide backend.
+The converter no longer depends on Zopfli or zlib-rs. See the
+[converter README](crates/opencc-office-converter/README.md) for the dependency
+tree and [ZIP vendoring notes](crates/opencc-office-converter/src/zip/VENDOR_NOTES.md)
+for provenance, licensing, validation limits, and maintenance requirements.
+
 ### Shared API migration
 
 `opencc-office-converter::TextConverter::convert` now takes only `&str` and returns `String`.

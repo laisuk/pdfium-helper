@@ -10,6 +10,12 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Vendored the hardened ZIP 3.0.0 module from local opencc-rs in the shared Office converter, preserving Rust 1.75
+  support and the configured text-conversion APIs. Updated the integration harness to use the same private source.
+- Replaced external `zip` with direct support crates and pure-Rust DEFLATE (flate2 1.1.1 / miniz_oxide); removed
+  Zopfli and zlib-rs from the converter dependency tree. Added dependency, attribution, and maintenance documentation.
+- Added ZIP/header and all-format conversion regressions. Inconsistent headers, duplicate names, and overlapping
+  indexed entries reject the package; unsafe paths remain skipped, now including drive-relative paths, ADS, and NULs.
 - Replaced the `zstd` crate dependency with a vendored pure Rust decoder adapted from `ruzstd` 0.9.0 for embedded
   Pdfium binaries. The decoder is compiled only with `pdfium-embed`, removing the native Zstandard build dependency.
 - Documented decoder format support and limits, artifact regeneration, and upstream MIT attribution; included the

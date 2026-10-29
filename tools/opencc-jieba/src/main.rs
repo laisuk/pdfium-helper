@@ -498,7 +498,8 @@ fn handle_segment(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>
 
             out
         }
-        _ => opencc.jieba_cut(&input_str, hmm).join(delimiter),
+        // _ => opencc.jieba_cut(&input_str, hmm).join(delimiter),
+        _ => opencc.jieba_cut_and_join(&input_str, hmm, delimiter),
     };
 
     let (is_console_output, mut output) = open_output(output_file)?;

@@ -29,7 +29,7 @@ Source: user-supplied trimmed `zip2-3.0.0.zip`, from
 [zip-rs/zip2](https://github.com/zip-rs/zip2), crates.io package `zip` **3.0.0**.
 The installed registry copy of that exact version's manifest was inspected for
 dependencies and Rust 1.75.0 support. MIT license, copyright © 2014 Mathijs van
-de Nes, preserved verbatim in [zip/LICENSE](zip/LICENSE). Upstream package authors:
+de Nes, preserved verbatim in [zip/LICENSE](/LICENSE). Upstream package authors:
 Mathijs van de Nes, Marli Frost, Ryan Levick, and Chris Hennick.
 
 Vendored exclusively inside the CLI's private `office_converter::zip` module to

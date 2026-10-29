@@ -25,7 +25,8 @@ verification results refer to the original repositories, not this port.
 - Kept all eight source ZIP regression tests and adapted three converter security
   regressions to the configured closure API and argument order. Existing package
   selection, fonts, raw assets, and output lifecycle behavior remain intact.
-- Marked ten upstream crate-only examples as `rust,ignore`: they reference the external ZIP crate and private APIs. The public converter doctest remains active.
+- Marked ten upstream crate-only examples as `rust,ignore`: they reference the external ZIP crate and private APIs. The
+  public converter doctest remains active.
 - Applied this crate's Rust 1.75 rustfmt layout; no Rust 2024-specific edits from
   the WASM port are needed here.
 
@@ -48,7 +49,6 @@ The private ZIP source is not automatically covered by external zip dependency
 alerts. Track upstream/RustSec advisories, assess fixes against retained paths,
 keep attribution and notes current, and run Rust 1.75 tests plus workspace checks
 on updates. Do not close an advisory just because zip vanished from Cargo.lock.
-
 
 ## Port verification (2026-10-30, Windows x86_64 MSVC, Rust 1.75.0)
 

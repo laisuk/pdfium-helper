@@ -18,11 +18,13 @@ clap_lex = "=1.0"
 #time-core = "=0.1.4"
 
 opencc-fmmseg = { git = "https://github.com/laisuk/opencc-fmmseg.git", branch = "master" }
-#opencc-fmmseg = "0.13.0"
+#opencc-fmmseg = "0.13.1"
 #opencc-fmmseg = { path = "../../../opencc-fmmseg" }
 opencc-utils = { path = "../../crates/opencc-utils" }
 
 [build-dependencies]
-winres = "0.1"
 toml = "=0.8"
 #indexmap = "=2.11.4"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"

@@ -23,6 +23,8 @@ clap_lex = "=1.0"
 #libflate = "=2.1.0"
 
 [build-dependencies]
-winres = "0.1"
 toml = "=0.8"
 #indexmap = "=2.11.4"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"

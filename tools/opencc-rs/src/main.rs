@@ -19,6 +19,16 @@ use text_converter::{create_text_converter, TextConverterOptions};
 fn main() {
     let matches = Command::new("opencc-rs")
         .about("OpenCC Rust: Command Line Open Chinese Converter")
+        .version(env!("OPENCC_CLI_VERSION"))
+        .disable_version_flag(true)
+        .arg(
+            Arg::new("version")
+                .short('v')
+                .long("version")
+                .global(true)
+                .action(clap::ArgAction::Version)
+                .help("Print version information")
+        )
         .subcommand_required(true)
         .arg_required_else_help(true)
         .subcommand(
@@ -515,11 +525,15 @@ mod tests {
 
     #[test]
     fn custom_dict_specs_use_canonical_case_insensitive_slot_parsing() {
-        let spec = parse_custom_dict_spec("hkphrasesrev:APPEND:../../../tests/my_hk_dict.txt").unwrap();
+        let spec =
+            parse_custom_dict_spec("hkphrasesrev:APPEND:../../../tests/my_hk_dict.txt").unwrap();
 
         assert_eq!(spec.slot, DictSlot::HKPhrasesRev);
         assert_eq!(spec.mode, CustomDictMode::Append);
-        assert_eq!(spec.files, vec![PathBuf::from("../../../tests/my_hk_dict.txt")]);
+        assert_eq!(
+            spec.files,
+            vec![PathBuf::from("../../../tests/my_hk_dict.txt")]
+        );
     }
 
     #[test]

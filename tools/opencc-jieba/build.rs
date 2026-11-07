@@ -1,4 +1,4 @@
-#[cfg(target_os = "windows")]
+// #[cfg(target_os = "windows")]
 fn read_capi_revision() -> u16 {
     use std::{env, fs, path::Path};
     use toml::Value;
@@ -36,6 +36,14 @@ fn pack_win_ver(major: u16, minor: u16, patch: u16, revision: u16) -> u64 {
 }
 
 fn main() {
+    println!("cargo:rerun-if-changed=Cargo.toml");
+    let revision = read_capi_revision();
+    println!(
+        "cargo:rustc-env=OPENCC_CLI_VERSION={}.{}",
+        env!("CARGO_PKG_VERSION"),
+        revision
+    );
+    
     #[cfg(target_os = "windows")]
     {
         println!("cargo:rerun-if-changed=Cargo.toml");

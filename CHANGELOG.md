@@ -6,7 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.1.7] - Unreleased
+## 0.1.7 - Unreleased
 
 ### Changed
 
@@ -26,7 +26,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.1.6] - 2026-09-26
+## 0.1.6 - 2026-09-26
 
 ### Added
 
@@ -54,7 +54,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.1.5] - 2026-06-29
+## 0.1.5 - 2026-06-29
 
 ### Added
 
@@ -68,7 +68,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.1.4] - 2026-05-25
+## 0.1.4 - 2026-05-25
 
 ### Changed
 
@@ -76,7 +76,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.1.3] - 2026-05-02
+## 0.1.3 - 2026-05-02
 
 ### Added
 
@@ -88,7 +88,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.1.2] - 2026-04-25
+## 0.1.2 - 2026-04-25
 
 ### Added
 

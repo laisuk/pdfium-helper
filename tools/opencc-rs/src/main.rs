@@ -25,7 +25,6 @@ fn main() {
             Arg::new("version")
                 .short('v')
                 .long("version")
-                .global(true)
                 .action(clap::ArgAction::Version)
                 .help("Print version information")
         )

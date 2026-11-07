@@ -43,7 +43,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Arg::new("version")
                 .short('v')
                 .long("version")
-                .global(true)
                 .action(clap::ArgAction::Version)
                 .help("Print version information")
         )

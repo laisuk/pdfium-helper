@@ -22,6 +22,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   vendored license and notices in the package file list.
 - Added crate-level Rustdoc and docs.rs metadata enabling `pdfium-embed` so embedded-loading APIs are documented.
 - CLI: Optimized font placeholder restoration during Office and EPUB document conversion.
+- CLI: added `-v/--version` flags.
 
 ---
 

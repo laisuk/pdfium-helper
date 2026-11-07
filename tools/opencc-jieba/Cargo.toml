@@ -4,7 +4,7 @@ version = "0.9.0"
 edition = "2021"
 
 [package.metadata.capi]
-revision = 0
+revision = 1
 
 [dependencies]
 opencc-jieba-rs = { git = "https://github.com/laisuk/opencc-jieba-rs.git", branch = "master" }

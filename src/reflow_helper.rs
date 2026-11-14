@@ -114,7 +114,7 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
         let stripped_visual = strip_halfwidth_indent_keep_fullwidth(trimmed_end);
 
         // 1.1) Logical probe for heading detection (no left indent)
-        let probe = stripped_visual.trim_start_matches(|ch| ch == ' ' || ch == '\u{3000}');
+        let probe = stripped_visual.trim_start_matches([' ', '\u{3000}']);
 
         // 1.2 Visual divider line (box drawing / ---- / === / *** / ★★★ etc.)
         // Always force paragraph breaks.
@@ -131,7 +131,7 @@ pub fn reflow_cjk_paragraphs_with_heading_regex(
         let line_text = collapse_repeated_segments(stripped_visual);
 
         // 3) Logical probe for heading detection (no left indent)
-        let heading_probe = line_text.trim_start_matches(|ch| ch == ' ' || ch == '\u{3000}');
+        let heading_probe = line_text.trim_start_matches([' ', '\u{3000}']);
 
         // 4) Empty line
         if heading_probe.trim().is_empty() {

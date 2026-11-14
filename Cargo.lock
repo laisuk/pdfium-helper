@@ -313,8 +313,8 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opencc-fmmseg"
-version = "0.13.1"
-source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#da182ccdbd876b7f4b2b369148ccbaf417fd6a80"
+version = "0.13.2"
+source = "git+https://github.com/laisuk/opencc-fmmseg.git?branch=master#1ab4d71acd0fc4e17ab4dfb55ceee3d7387872c0"
 dependencies = [
  "rayon",
  "rayon-core",
@@ -338,7 +338,7 @@ dependencies = [
 [[package]]
 name = "opencc-jieba-rs"
 version = "0.9.0"
-source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#41a511d3825840eef68f35d8a9b3c1124ffad7ce"
+source = "git+https://github.com/laisuk/opencc-jieba-rs.git?branch=master#d1e34bc3ba71bf5cc87e26da312f6411d6c445f0"
 dependencies = [
  "bytecount",
  "rayon",
@@ -361,7 +361,7 @@ dependencies = [
 
 [[package]]
 name = "opencc-rs"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "clap",
  "clap_lex",
@@ -536,9 +536,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.15.1"
+version = "1.16.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
+checksum = "149309498a5f7334b12ddae0cad8aba81ce785fe91755068867e017cf98fee46"
 
 [[package]]
 name = "strsim"

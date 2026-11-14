@@ -279,7 +279,7 @@ fn get_text_from_text_object(
         return String::new();
     }
 
-    let u16_count = (required_bytes + 1) / 2;
+    let u16_count = required_bytes.div_ceil(2);
 
     if u16_count <= 1 || u16_count > 10_000_000 {
         return String::new();

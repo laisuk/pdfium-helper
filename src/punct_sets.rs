@@ -433,7 +433,7 @@ pub fn is_visual_divider_line(s: &str) -> bool {
 }
 
 pub fn begins_with_dialog_opener(s: &str) -> bool {
-    let trimmed = s.trim_start_matches(|ch| ch == ' ' || ch == '\u{3000}');
+    let trimmed = s.trim_start_matches([' ', '\u{3000}']);
     trimmed.chars().next().is_some_and(is_dialog_opener)
 }
 

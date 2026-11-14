@@ -16,7 +16,6 @@ authors = ["Laisuk Lai <laisuk@yahoo.com>"]
 description = "Internal PDFium helper crate for native loading, PDF text extraction, and CJK-aware paragraph reflow."
 license = "MIT"
 repository = "https://github.com/laisuk/pdfium-helper"
-homepage = "https://github.com/laisuk/pdfium-helper"
 documentation = "https://docs.rs/pdfium-helper"
 readme = "README.md"
 keywords = ["pdfium", "pdf", "text-extraction", "cjk", "reflow"]
@@ -42,7 +41,7 @@ include = [
 libloading = "=0.8"
 thiserror = "=2.0.20"
 anyhow = "1.0"
-smallvec = "=1.15"
+smallvec = "=1.16"
 regex = "1.13"
 unicode-general-category = "1"
 

@@ -23,6 +23,8 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 - Added crate-level Rustdoc and docs.rs metadata enabling `pdfium-embed` so embedded-loading APIs are documented.
 - CLI: Optimized font placeholder restoration during Office and EPUB document conversion.
 - CLI: added `-v/--version` flags.
+- Update `Pdfium` native to `version 159.0.8152.0`.
+- Update `opencc-fmmseg` to `v0.13.2`.
 
 ---
 
